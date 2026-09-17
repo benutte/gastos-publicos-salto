@@ -1,0 +1,16 @@
+api:
+  base_url: "https://transparencia.tce.sp.gov.br/api/json"
+  connect_timeout_seconds: 10
+  read_timeout_seconds: 120
+  max_retries: 4
+  backoff_factor: 2
+
+ingestion:
+  municipality: "salto"
+  historical_start_year: 2020
+  refresh_previous_year: true
+  save_empty_responses: true
+
+storage:
+  bronze_path: "data/bronze"
+  manifest_path: "data/metadata/ingestion_manifest.jsonl"

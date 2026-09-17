@@ -1,0 +1,27 @@
+# Ambiente virtual
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Variáveis e segredos
+.env
+.env.*
+
+# Dados locais
+data/
+
+# dbt
+dbt_packages/
+target/
+logs/
+
+# IDE e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
