@@ -30,6 +30,8 @@ def create_lakehouse_connection(
     Returns:
         Conexão DuckDB aberta e pronta para utilizar o catálogo DuckLake.
     """
+    # Caminhos absolutos garantem que Python, dbt e DuckLake identifiquem
+    # exatamente os mesmos locais, independentemente do diretório de execução.
     catalog_path = catalog_path.resolve()
     data_path = data_path.resolve()
 

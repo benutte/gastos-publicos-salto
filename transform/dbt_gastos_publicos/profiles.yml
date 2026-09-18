@@ -12,7 +12,7 @@ gastos_publicos:
         - ducklake
 
       attach:
-        - path: "ducklake:../../data/lakehouse/catalog/gastos_publicos.ducklake"
+        - path: "ducklake:{{ env_var('PWD') }}/data/lakehouse/catalog/gastos_publicos.ducklake"
           alias: gastos_publicos
           options:
-            data_path: "../../data/lakehouse/files/"
+            data_path: "{{ env_var('PWD') }}/data/lakehouse/files/"

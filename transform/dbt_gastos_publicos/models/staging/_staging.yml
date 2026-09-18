@@ -1,0 +1,159 @@
+version: 2
+
+models:
+  - name: stg_despesas
+    description: >
+      Despesas municipais provenientes dos snapshots mais recentes da camada
+      Bronze, com campos limpos e tipados para uso analítico.
+
+    columns:
+      - name: municipio
+        description: Identificador do município extraído da partição Bronze.
+        data_tests:
+          - not_null
+
+      - name: exercicio
+        description: Exercício fiscal extraído da partição Bronze.
+        data_tests:
+          - not_null
+
+      - name: mes
+        description: Número do mês convertido do nome recebido pela API.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+                  - 2
+                  - 3
+                  - 4
+                  - 5
+                  - 6
+                  - 7
+                  - 8
+                  - 9
+                  - 10
+                  - 11
+                  - 12
+                quote: false
+
+      - name: orgao
+        description: Órgão municipal responsável pelo lançamento.
+        data_tests:
+          - not_null
+
+      - name: evento
+        description: Tipo de evento financeiro associado ao empenho.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "Anulação"
+                  - "Empenhado"
+                  - "Reforço"
+                  - "Valor Liquidado"
+                  - "Valor Pago"
+
+      - name: nr_empenho
+        description: Identificador textual do empenho.
+        data_tests:
+          - not_null
+
+      - name: id_fornecedor
+        description: Identificação do fornecedor conforme a API.
+        data_tests:
+          - not_null
+
+      - name: nm_fornecedor
+        description: Nome do fornecedor.
+        data_tests:
+          - not_null
+
+      - name: dt_emissao_despesa
+        description: Data de emissão convertida para DATE.
+        data_tests:
+          - not_null
+
+      - name: vl_despesa
+        description: Valor da despesa convertido para DECIMAL(18,2).
+        data_tests:
+          - not_null
+
+      - name: arquivo_origem
+        description: Snapshot Bronze que originou o registro.
+        data_tests:
+          - not_null
+
+  - name: stg_receitas
+    description: >
+      Receitas municipais provenientes dos snapshots mais recentes da camada
+      Bronze, com campos limpos e tipados para uso analítico.
+
+    columns:
+      - name: municipio
+        description: Identificador do município extraído da partição Bronze.
+        data_tests:
+          - not_null
+
+      - name: exercicio
+        description: Exercício fiscal extraído da partição Bronze.
+        data_tests:
+          - not_null
+
+      - name: mes
+        description: Número do mês convertido do nome recebido pela API.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+                  - 2
+                  - 3
+                  - 4
+                  - 5
+                  - 6
+                  - 7
+                  - 8
+                  - 9
+                  - 10
+                  - 11
+                  - 12
+                quote: false
+
+      - name: orgao
+        description: Órgão municipal responsável pelo registro da receita.
+        data_tests:
+          - not_null
+
+      - name: ds_fonte_recurso
+        description: Código e descrição da fonte de recurso.
+        data_tests:
+          - not_null
+
+      - name: ds_cd_aplicacao_fixo
+        description: Código e descrição da aplicação fixa.
+        data_tests:
+          - not_null
+
+      - name: ds_alinea
+        description: Código e descrição da alínea.
+        data_tests:
+          - not_null
+
+      - name: ds_subalinea
+        description: >
+          Código e descrição da subalínea. Esse campo é opcional na fonte e,
+          portanto, não possui teste not_null.
+
+      - name: vl_arrecadacao
+        description: Valor arrecadado convertido para DECIMAL(18,2).
+        data_tests:
+          - not_null
+
+      - name: arquivo_origem
+        description: Snapshot Bronze que originou o registro.
+        data_tests:
+          - not_null
