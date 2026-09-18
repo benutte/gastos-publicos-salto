@@ -37,13 +37,16 @@ Power BI
 
 ## Status atual
 
-A camada Bronze está implementada e validada para o município de Salto/SP.
+As camadas Bronze e Silver estão implementadas e validadas para o município de Salto/SP.
+
+### Camada Bronze
 
 Principais recursos concluídos:
 
 - ingestão mensal de despesas e receitas da API do TCE-SP;
 - armazenamento de respostas JSON brutas e imutáveis;
 - particionamento por dataset, município, exercício e mês;
+- criação de snapshots com timestamp UTC;
 - escrita atômica dos arquivos;
 - manifesto de execução com metadados, hash SHA-256 e status;
 - retry com backoff exponencial para falhas temporárias;
@@ -63,6 +66,54 @@ O backfill de janeiro de 2020 a setembro de 2026 foi concluído:
 
 As respostas vazias correspondem às receitas e despesas de agosto e setembro de 2026. Elas foram preservadas como arquivos JSON contendo uma lista vazia e registradas no manifesto com o status `empty`.
 
+A Bronze possui 88 arquivos físicos por dataset. Algumas partições de 2026 possuem mais de um snapshot devido a reexecuções. Os arquivos anteriores são preservados para auditoria, mas apenas o snapshot mais recente de cada partição mensal é enviado para a Silver.
+
+### Camada Silver
+
+A camada Silver utiliza dbt Core, DuckDB e DuckLake para selecionar, limpar, tipar, testar e materializar os dados da Bronze.
+
+Modelos implementados:
+
+- `stg_despesas`;
+- `stg_receitas`.
+
+Volumes materializados:
+
+- 300.149 registros de despesas;
+- 14.354 registros de receitas;
+- 81 snapshots mensais selecionados por dataset.
+
+Transformações implementadas:
+
+- seleção do snapshot mais recente de cada partição mensal;
+- conversão do nome do mês para número inteiro;
+- conversão de datas do formato `DD/MM/AAAA` para `DATE`;
+- conversão de valores monetários brasileiros para `DECIMAL(18,2)`;
+- normalização de strings vazias de subalínea para `NULL`;
+- preservação do arquivo Bronze de origem para rastreabilidade;
+- desativação do particionamento Hive automático durante a leitura dos JSON;
+- preservação de valores financeiros positivos, negativos e iguais a zero.
+
+A inspeção histórica identificou o evento de despesa `Reforço`, que foi incluído nos valores aceitos pelo contrato da Silver.
+
+As receitas possuem 56 grupos de registros com atributos idênticos dentro do mesmo exercício, correspondentes a 70 linhas adicionais. Como a API não fornece chave transacional ou data de arrecadação que permita distinguir duplicidades técnicas de lançamentos legítimos, nenhuma linha é removida automaticamente.
+
+Qualidade e validação:
+
+- 27 testes Python aprovados;
+- 23 testes genéricos do dbt;
+- 2 testes SQL personalizados;
+- 25 testes dbt aprovados;
+- `dbt build` concluído com 27 recursos aprovados;
+- nenhuma falha, aviso ou recurso ignorado na última validação.
+
+As tabelas atuais estão materializadas no catálogo DuckLake:
+
+```text
+gastos_publicos.silver.stg_despesas
+gastos_publicos.silver.stg_receitas
+
+```
 ## Fonte e escopo dos dados
 
 Os dados são obtidos pela API de Transparência do Tribunal de Contas do Estado de São Paulo, TCE-SP.
