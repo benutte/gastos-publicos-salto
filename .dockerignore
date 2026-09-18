@@ -1,0 +1,15 @@
+.git
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+data
+logs
+
+transform/dbt_gastos_publicos/target
+transform/dbt_gastos_publicos/dbt_packages
+
+README.md.bak
