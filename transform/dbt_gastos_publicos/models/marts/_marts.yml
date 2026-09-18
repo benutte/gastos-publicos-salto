@@ -1,0 +1,304 @@
+version: 2
+
+models:
+  - name: dim_municipio
+    description: >
+      Dimensão conformada de municípios utilizada pelas tabelas fato da
+      camada Gold.
+
+    columns:
+      - name: municipio_sk
+        description: Chave substituta determinística do município.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: municipio
+        description: Identificador de negócio utilizado pela API.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: nm_municipio
+        description: Nome amigável do município.
+        data_tests:
+          - not_null
+
+      - name: uf
+        description: Unidade federativa do município.
+        data_tests:
+          - not_null
+
+  - name: dim_orgao
+    description: >
+      Dimensão conformada de órgãos públicos compartilhada pelas fatos de
+      despesas e receitas.
+
+    columns:
+      - name: orgao_sk
+        description: Chave substituta determinística do órgão.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: municipio_sk
+        description: Chave do município ao qual o órgão pertence.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_municipio')
+                field: municipio_sk
+
+      - name: municipio
+        description: Identificador de negócio do município.
+        data_tests:
+          - not_null
+
+      - name: nm_orgao
+        description: Nome do órgão conforme disponibilizado pela API.
+        data_tests:
+          - not_null
+
+  - name: dim_tempo
+    description: >
+      Dimensão calendário mensal contínua entre janeiro de 2020 e o mês
+      corrente.
+
+    columns:
+      - name: tempo_sk
+        description: Chave temporal numérica no formato AAAAMM.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: dt_mes
+        description: Primeiro dia do mês representado pela linha.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: exercicio
+        description: Ano do período.
+        data_tests:
+          - not_null
+
+      - name: mes
+        description: Número do mês.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+                  - 2
+                  - 3
+                  - 4
+                  - 5
+                  - 6
+                  - 7
+                  - 8
+                  - 9
+                  - 10
+                  - 11
+                  - 12
+                quote: false
+
+      - name: nm_mes
+        description: Nome do mês em português.
+        data_tests:
+          - not_null
+
+      - name: trimestre
+        description: Número do trimestre.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+                  - 2
+                  - 3
+                  - 4
+                quote: false
+
+      - name: semestre
+        description: Número do semestre.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 1
+                  - 2
+                quote: false
+
+      - name: ano_mes
+        description: Período textual no formato AAAA-MM.
+        data_tests:
+          - not_null
+          - unique
+
+  - name: dim_fornecedor
+    description: >
+      Dimensão de fornecedores das despesas municipais. Para pessoas físicas,
+      a chave de negócio combina o identificador da API com o nome porque um
+      mesmo identificador pode estar associado a pessoas diferentes.
+
+    columns:
+      - name: fornecedor_sk
+        description: Chave substituta determinística do fornecedor.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: fornecedor_bk
+        description: Chave de negócio construída conforme o tipo de fornecedor.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: id_fornecedor
+        description: Identificador original recebido da API.
+        data_tests:
+          - not_null
+
+      - name: tipo_fornecedor
+        description: Categoria do identificador do fornecedor.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "CNPJ"
+                  - "PESSOA FÍSICA"
+                  - "IDENTIFICAÇÃO ESPECIAL"
+                  - "INSCRIÇÃO GENÉRICA"
+                  - "INTERNACIONAL"
+                  - "OUTRO"
+
+      - name: nm_fornecedor_atual
+        description: >
+          Nome selecionado pela data mais recente, frequência e desempate
+          alfabético.
+        data_tests:
+          - not_null
+
+      - name: primeira_dt_observada
+        description: Primeira data em que o fornecedor apareceu nas despesas.
+        data_tests:
+          - not_null
+
+      - name: ultima_dt_observada
+        description: Última data em que o fornecedor apareceu nas despesas.
+        data_tests:
+          - not_null
+
+      - name: qtd_nomes_observados
+        description: Quantidade de nomes distintos associados à entidade.
+        data_tests:
+          - not_null
+
+  - name: fct_despesas
+    description: >
+      Tabela fato de eventos financeiros de despesas municipais. Cada linha
+      representa um evento associado a um empenho, conforme a granularidade
+      disponibilizada pela API do TCE-SP.
+
+    columns:
+      - name: despesa_sk
+        description: >
+          Chave determinística construída a partir dos atributos do registro,
+          sem incluir o arquivo de origem.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: municipio_sk
+        description: Chave estrangeira para a dimensão de município.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_municipio')
+                field: municipio_sk
+
+      - name: orgao_sk
+        description: Chave estrangeira para a dimensão de órgão.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_orgao')
+                field: orgao_sk
+
+      - name: tempo_sk
+        description: Chave estrangeira mensal no formato AAAAMM.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tempo')
+                field: tempo_sk
+
+      - name: fornecedor_sk
+        description: Chave estrangeira para a dimensão de fornecedor.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_fornecedor')
+                field: fornecedor_sk
+
+      - name: exercicio
+        description: Exercício fiscal do lançamento.
+        data_tests:
+          - not_null
+
+      - name: mes
+        description: Número do mês do lançamento.
+        data_tests:
+          - not_null
+
+      - name: evento
+        description: Tipo de evento financeiro associado ao empenho.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - "Anulação"
+                  - "Empenhado"
+                  - "Reforço"
+                  - "Valor Liquidado"
+                  - "Valor Pago"
+
+      - name: nr_empenho
+        description: Identificador textual do empenho.
+        data_tests:
+          - not_null
+
+      - name: dt_emissao_despesa
+        description: Data de emissão da despesa.
+        data_tests:
+          - not_null
+
+      - name: vl_despesa
+        description: Valor financeiro do evento da despesa.
+        data_tests:
+          - not_null
+
+      - name: id_fornecedor
+        description: Identificador original do fornecedor recebido da API.
+        data_tests:
+          - not_null
+
+      - name: nm_fornecedor_origem
+        description: Nome do fornecedor preservado conforme o lançamento.
+        data_tests:
+          - not_null
+
+      - name: arquivo_origem
+        description: Snapshot Bronze que originou o registro.
+        data_tests:
+          - not_null
