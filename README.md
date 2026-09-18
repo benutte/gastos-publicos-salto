@@ -114,6 +114,62 @@ gastos_publicos.silver.stg_despesas
 gastos_publicos.silver.stg_receitas
 
 ```
+### Camada Gold
+
+A camada Gold utiliza modelagem dimensional para disponibilizar dados analíticos preparados para consumo no Power BI.
+
+Dimensões implementadas:
+
+- `dim_municipio`;
+- `dim_orgao`;
+- `dim_tempo`;
+- `dim_fornecedor`;
+- `dim_fonte_recurso`;
+- `dim_aplicacao`;
+- `dim_alinea`;
+- `dim_subalinea`.
+
+Tabelas fato implementadas:
+
+- `fct_despesas`;
+- `fct_receitas`.
+
+Volumes materializados:
+
+- 300.149 eventos de despesas;
+- 14.354 ocorrências de receitas;
+- 6.063 fornecedores dimensionais;
+- 81 períodos mensais na dimensão de tempo;
+- 5 fontes de recurso;
+- 60 aplicações fixas;
+- 110 alíneas;
+- 148 membros na dimensão de subalínea.
+
+A dimensão de tempo mantém um calendário contínuo de janeiro de 2020 a setembro de 2026, incluindo períodos sem registros financeiros.
+
+A dimensão de subalínea possui um membro especial `Não informada`, utilizado pelas 9.008 receitas cuja fonte não disponibilizou essa classificação.
+
+A modelagem de fornecedores utiliza regras diferentes conforme o tipo de identificação. Pessoas físicas utilizam a combinação entre identificador e nome para evitar que pessoas diferentes sejam agrupadas incorretamente.
+
+A tabela `fct_receitas` preserva todas as ocorrências da API. Registros com atributos idênticos não são removidos porque a fonte não disponibiliza informações suficientes para determinar se representam duplicidades técnicas.
+
+Validação integrada da transformação:
+
+- 12 modelos dbt materializados;
+- 109 testes dbt executados;
+- 121 recursos aprovados pelo `dbt build`;
+- nenhuma falha;
+- nenhum aviso;
+- nenhum recurso ignorado;
+- reconciliação financeira completa entre Silver e Gold.
+
+Tabelas fato materializadas:
+
+```text
+gastos_publicos.gold.fct_despesas
+gastos_publicos.gold.fct_receitas
+```
+
 ## Fonte e escopo dos dados
 
 Os dados são obtidos pela API de Transparência do Tribunal de Contas do Estado de São Paulo, TCE-SP.
@@ -589,37 +645,102 @@ A suíte automatizada substitui as chamadas HTTP reais por respostas controladas
 
 ## Próximas etapas
 
-As próximas etapas planejadas são:
+Com as camadas Bronze, Silver e Gold implementadas, as próximas etapas planejadas são:
 
-1. concluir a documentação da camada Bronze;
-2. revisar a configuração e os contratos de dados;
-3. adicionar testes complementares da camada Bronze, quando necessários;
-4. criar o catálogo local com DuckDB e DuckLake;
-5. iniciar a camada Silver;
-6. configurar o projeto dbt Core;
-7. criar modelos `stg_` para despesas e receitas;
-8. tipar, limpar e padronizar os dados;
-9. implementar testes de qualidade com dbt;
-10. criar a camada Gold com modelo dimensional;
-11. criar fatos e dimensões analíticas;
-12. configurar a orquestração com Apache Airflow e Docker;
-13. conectar os modelos analíticos ao Power BI;
-14. preparar a documentação final para apresentação no GitHub.
+1. concluir a documentação técnica da camada Gold;
+2. revisar a estratégia de atualização incremental da Silver e da Gold;
+3. criar comandos padronizados para execução do dbt;
+4. configurar Apache Airflow para orquestração;
+5. executar o pipeline localmente por meio do Docker;
+6. criar DAGs para ingestão, transformação e testes;
+7. implementar tratamento operacional de falhas e novas tentativas;
+8. adicionar monitoramento das execuções;
+9. conectar o catálogo analítico ao Power BI;
+10. criar medidas e indicadores financeiros;
+11. desenvolver dashboards de receitas e despesas;
+12. preparar diagramas da arquitetura e do modelo dimensional;
+13. revisar a documentação para publicação no GitHub;
+14. avaliar a expansão para outros municípios;
+15. avaliar enriquecimentos futuros com modelos de IA.
 
-## Modelagem planejada
+## Modelagem dimensional implementada
 
-A camada Gold deverá utilizar modelagem dimensional.
+A camada Gold utiliza modelagem dimensional para disponibilizar dados preparados para análise no Power BI.
 
-Modelos previstos:
+### Dimensões conformadas
 
-- `fct_despesas`;
-- `fct_receitas`;
-- `dim_municipio`;
-- `dim_fornecedor`;
-- `dim_tempo`;
-- dimensões adicionais identificadas durante a análise dos dados.
+- `dim_municipio`: municípios compartilhados pelas tabelas fato;
+- `dim_orgao`: órgãos públicos compartilhados entre despesas e receitas;
+- `dim_tempo`: calendário mensal contínuo entre janeiro de 2020 e o mês corrente;
+- `dim_fornecedor`: fornecedores relacionados às despesas;
+- `dim_fonte_recurso`: fontes de recurso das receitas;
+- `dim_aplicacao`: classificações de aplicação fixa;
+- `dim_alinea`: classificações de alínea;
+- `dim_subalinea`: classificações de subalínea, incluindo o membro especial `Não informada`.
 
-A definição final das chaves, granularidades e relacionamentos será realizada depois da exploração e padronização da camada Silver.
+### Tabelas fato
+
+- `fct_despesas`: eventos financeiros associados aos empenhos;
+- `fct_receitas`: ocorrências de receitas disponibilizadas pela API.
+
+### Granularidade de despesas
+
+Cada linha de `fct_despesas` representa um evento financeiro associado a um empenho.
+
+Eventos observados:
+
+- `Anulação`;
+- `Empenhado`;
+- `Reforço`;
+- `Valor Liquidado`;
+- `Valor Pago`.
+
+Os valores não devem ser somados indiscriminadamente entre eventos, pois empenhado, liquidado e pago representam estágios financeiros diferentes.
+
+### Granularidade de receitas
+
+Cada linha de `fct_receitas` representa uma ocorrência disponibilizada pela API.
+
+A fonte não fornece identificador transacional ou data de arrecadação. Por esse motivo:
+
+- nenhuma linha é removida por deduplicação;
+- registros com atributos idênticos são preservados;
+- uma impressão digital identifica o conteúdo da receita;
+- um número sequencial distingue ocorrências idênticas;
+- a chave criada é técnica e não representa um identificador oficial da fonte.
+
+### Tratamento de fornecedores
+
+A análise identificou que alguns códigos de pessoa física estão associados a nomes diferentes.
+
+A chave de negócio da dimensão utiliza:
+
+- `id_fornecedor` para CNPJ e demais identificações;
+- `id_fornecedor` combinado com `nm_fornecedor` para pessoas físicas.
+
+Essa regra evita agrupar pessoas diferentes que compartilham o mesmo identificador disponibilizado pela API.
+
+Quando um fornecedor possui vários nomes, o nome atual é selecionado pelos seguintes critérios:
+
+1. data mais recente observada;
+2. maior frequência na data mais recente;
+3. ordem alfabética como desempate técnico.
+
+O nome original de cada lançamento permanece preservado em `fct_despesas`.
+
+### Chaves dimensionais
+
+As dimensões utilizam chaves determinísticas para que uma reconstrução completa produza os mesmos identificadores.
+
+A dimensão temporal utiliza uma chave numérica no formato `AAAAMM`.
+
+Exemplo:
+
+```text
+202001
+202002
+202003
+```
 
 ## Expansão futura
 
