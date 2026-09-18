@@ -1,0 +1,60 @@
+-- A Gold deve preservar a quantidade de registros e o valor arrecadado de
+-- cada período existente na Silver, sem deduplicação ou multiplicação.
+
+with silver as (
+
+    select
+        municipio,
+        exercicio,
+        mes,
+        count(*) as quantidade_registros,
+        sum(vl_arrecadacao) as valor_total
+
+    from {{ ref('stg_receitas') }}
+
+    group by
+        municipio,
+        exercicio,
+        mes
+
+),
+
+gold as (
+
+    select
+        municipio.municipio,
+        receitas.exercicio,
+        receitas.mes,
+        count(*) as quantidade_registros,
+        sum(receitas.vl_arrecadacao) as valor_total
+
+    from {{ ref('fct_receitas') }} as receitas
+
+    inner join {{ ref('dim_municipio') }} as municipio
+        on receitas.municipio_sk = municipio.municipio_sk
+
+    group by
+        municipio.municipio,
+        receitas.exercicio,
+        receitas.mes
+
+)
+
+select
+    coalesce(silver.municipio, gold.municipio) as municipio,
+    coalesce(silver.exercicio, gold.exercicio) as exercicio,
+    coalesce(silver.mes, gold.mes) as mes,
+    silver.quantidade_registros as quantidade_silver,
+    gold.quantidade_registros as quantidade_gold,
+    silver.valor_total as valor_silver,
+    gold.valor_total as valor_gold
+
+from silver
+
+full outer join gold
+    on silver.municipio = gold.municipio
+    and silver.exercicio = gold.exercicio
+    and silver.mes = gold.mes
+
+where silver.quantidade_registros
+      is distinct from gold.quantidade_

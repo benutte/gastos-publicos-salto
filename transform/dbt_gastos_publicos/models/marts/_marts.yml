@@ -302,3 +302,140 @@ models:
         description: Snapshot Bronze que originou o registro.
         data_tests:
           - not_null
+
+  - name: fct_receitas
+    description: >
+      Tabela fato de receitas municipais. Cada linha preserva uma ocorrência
+      disponibilizada pela API, inclusive quando há registros com atributos
+      idênticos.
+
+    columns:
+      - name: receita_sk
+        description: >
+          Chave técnica única formada pela impressão digital e pelo número da
+          ocorrência.
+        data_tests:
+          - not_null
+          - unique
+
+      - name: receita_fingerprint
+        description: >
+          Impressão digital do conteúdo da receita. Pode se repetir porque a
+          fonte possui ocorrências idênticas legítimas ou não distinguíveis.
+        data_tests:
+          - not_null
+
+      - name: nr_ocorrencia
+        description: Sequencial técnico entre receitas de conteúdo idêntico.
+        data_tests:
+          - not_null
+
+      - name: municipio_sk
+        description: Chave estrangeira para a dimensão de município.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_municipio')
+                field: municipio_sk
+
+      - name: orgao_sk
+        description: Chave estrangeira para a dimensão de órgão.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_orgao')
+                field: orgao_sk
+
+      - name: tempo_sk
+        description: Chave estrangeira mensal no formato AAAAMM.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_tempo')
+                field: tempo_sk
+
+      - name: fonte_recurso_sk
+        description: Chave estrangeira para a dimensão de fonte de recurso.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_fonte_recurso')
+                field: fonte_recurso_sk
+
+      - name: aplicacao_sk
+        description: Chave estrangeira para a dimensão de aplicação.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_aplicacao')
+                field: aplicacao_sk
+
+      - name: alinea_sk
+        description: Chave estrangeira para a dimensão de alínea.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_alinea')
+                field: alinea_sk
+
+      - name: subalinea_sk
+        description: >
+          Chave estrangeira para a dimensão de subalínea. Receitas sem
+          subalínea utilizam o membro especial -1.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_subalinea')
+                field: subalinea_sk
+
+      - name: exercicio
+        description: Exercício fiscal da receita.
+        data_tests:
+          - not_null
+
+      - name: mes
+        description: Número do mês da receita.
+        data_tests:
+          - not_null
+
+      - name: vl_arrecadacao
+        description: Valor arrecadado preservado em DECIMAL(18,2).
+        data_tests:
+          - not_null
+
+      - name: nm_orgao_origem
+        description: Nome do órgão preservado conforme o registro de origem.
+        data_tests:
+          - not_null
+
+      - name: ds_fonte_recurso
+        description: Classificação original da fonte de recurso.
+        data_tests:
+          - not_null
+
+      - name: ds_cd_aplicacao_fixo
+        description: Classificação original da aplicação fixa.
+        data_tests:
+          - not_null
+
+      - name: ds_alinea
+        description: Classificação original da alínea.
+        data_tests:
+          - not_null
+
+      - name: ds_subalinea
+        description: >
+          Classificação original da subalínea. Pode ser nula quando a fonte
+          não disponibiliza essa informação.
+
+      - name: arquivo_origem
+        description: Snapshot Bronze que originou o registro.
+        data_tests:
+          - not_null
