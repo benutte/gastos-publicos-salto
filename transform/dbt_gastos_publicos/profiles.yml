@@ -1,0 +1,18 @@
+gastos_publicos:
+  target: dev
+
+  outputs:
+    dev:
+      type: duckdb
+      path: ":memory:"
+      schema: main
+      threads: 4
+
+      extensions:
+        - ducklake
+
+      attach:
+        - path: "ducklake:../../data/lakehouse/catalog/gastos_publicos.ducklake"
+          alias: gastos_publicos
+          options:
+            data_path: "../../data/lakehouse/files/"

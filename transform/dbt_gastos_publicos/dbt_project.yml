@@ -1,0 +1,40 @@
+name: "gastos_publicos"
+version: "1.0.0"
+config-version: 2
+
+profile: "gastos_publicos"
+
+model-paths:
+  - "models"
+
+analysis-paths:
+  - "analyses"
+
+test-paths:
+  - "tests"
+
+seed-paths:
+  - "seeds"
+
+macro-paths:
+  - "macros"
+
+snapshot-paths:
+  - "snapshots"
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  gastos_publicos:
+    staging:
+      +database: gastos_publicos
+      +schema: silver
+      +materialized: table
+
+    marts:
+      +database: gastos_publicos
+      +schema: gold
+      +materialized: table
