@@ -1,4 +1,3 @@
-
 """Leitura dos snapshots selecionados da camada Bronze com DuckDB."""
 
 from collections.abc import Sequence
@@ -44,6 +43,11 @@ def create_bronze_view(
     A coluna virtual filename é mantida para garantir rastreabilidade até o
     arquivo Bronze que originou cada registro.
 
+    O reconhecimento automático de partições Hive é desativado porque os
+    caminhos possuem componentes como mes=01, enquanto os arquivos JSON
+    também possuem uma coluna chamada mes com valores como Janeiro. Sem essa
+    configuração, o valor da partição pode substituir o conteúdo original.
+
     Args:
         connection: Conexão DuckDB aberta.
         dataset: Dataset que será lido, como despesas ou receitas.
@@ -77,17 +81,16 @@ def create_bronze_view(
 
     columns = BRONZE_SCHEMAS[dataset]
 
-    # Declara explicitamente todas as colunas como VARCHAR para preservar
-    # os valores brutos recebidos da API.
+    # Todas as colunas são declaradas como VARCHAR para preservar os valores
+    # recebidos da API antes das transformações da camada Silver.
     columns_sql = ", ".join(
         f"'{column}': '{column_type}'"
         for column, column_type in columns.items()
     )
 
-    # Instruções CREATE VIEW não aceitam parâmetros preparados para a lista
-    # de arquivos. Portanto, os caminhos são convertidos em literais SQL.
-    # Aspas simples existentes nos caminhos são duplicadas para impedir que
-    # elas interrompam a instrução SQL.
+    # CREATE VIEW não aceita parâmetros preparados para uma lista de arquivos.
+    # Os caminhos são convertidos em literais SQL e eventuais aspas simples
+    # são duplicadas para não interromper a instrução.
     snapshot_paths_sql = ", ".join(
         f"'{path.replace(chr(39), chr(39) * 2)}'"
         for path in snapshot_paths
@@ -101,7 +104,8 @@ def create_bronze_view(
             [{snapshot_paths_sql}],
             format = 'array',
             columns = {{{columns_sql}}},
-            filename = true
+            filename = true,
+            hive_partitioning = false
         )
         """
     )
