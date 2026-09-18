@@ -1,0 +1,161 @@
+version: 1
+
+dataset:
+  name: silver_despesas
+  source: tce_sp
+  description: >
+    Despesas municipais limpas e tipadas a partir dos snapshots mais recentes
+    da camada Bronze da API de Transparência do TCE-SP.
+  grain: >
+    Um registro de evento financeiro associado a um empenho, conforme a
+    granularidade disponibilizada pela API de origem.
+
+source_selection:
+  strategy: latest_snapshot_per_partition
+  partition_keys:
+    - dataset
+    - municipio
+    - exercicio
+    - mes
+  preserve_previous_snapshots: true
+
+columns:
+  - name: municipio
+    data_type: varchar
+    nullable: false
+    source: file_path
+    description: >
+      Identificador do município extraído do caminho da partição Bronze.
+
+  - name: exercicio
+    data_type: integer
+    nullable: false
+    source: file_path
+    description: >
+      Exercício fiscal extraído do caminho da partição Bronze.
+
+  - name: mes
+    data_type: integer
+    nullable: false
+    source: mes
+    description: >
+      Número do mês convertido a partir do nome em português recebido da API.
+    accepted_values:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+
+  - name: orgao
+    data_type: varchar
+    nullable: false
+    source: orgao
+    description: Órgão municipal responsável pelo lançamento.
+
+  - name: evento
+    data_type: varchar
+    nullable: false
+    source: evento
+    description: Tipo de evento financeiro registrado para o empenho.
+    accepted_values:
+      - Anulação
+      - Empenhado
+      - Reforço
+      - Valor Liquidado
+      - Valor Pago
+
+  - name: nr_empenho
+    data_type: varchar
+    nullable: false
+    source: nr_empenho
+    description: >
+      Identificador textual do empenho, preservado como texto porque contém
+      componentes como número e exercício separados por hífen.
+
+  - name: id_fornecedor
+    data_type: varchar
+    nullable: false
+    source: id_fornecedor
+    description: >
+      Identificação do fornecedor conforme fornecida pela API, podendo conter
+      o tipo de documento e o número do documento no mesmo campo.
+
+  - name: nm_fornecedor
+    data_type: varchar
+    nullable: false
+    source: nm_fornecedor
+    description: Nome do fornecedor associado ao lançamento.
+
+  - name: dt_emissao_despesa
+    data_type: date
+    nullable: false
+    source: dt_emissao_despesa
+    transformation: strptime_dd_mm_yyyy
+    description: >
+      Data de emissão da despesa convertida do formato brasileiro DD/MM/AAAA.
+
+  - name: vl_despesa
+    data_type: decimal(18,2)
+    nullable: false
+    source: vl_despesa
+    transformation: brazilian_decimal
+    description: >
+      Valor da despesa convertido do formato monetário brasileiro para tipo
+      decimal, preservando valores positivos, negativos e zero.
+
+  - name: arquivo_origem
+    data_type: varchar
+    nullable: false
+    source: filename
+    description: Caminho do snapshot Bronze que originou o registro.
+
+quality_rules:
+  - name: valid_month
+    description: O mês deve estar entre 1 e 12.
+    severity: error
+
+  - name: valid_event
+    description: O evento deve pertencer à lista de valores observados.
+    severity: error
+
+  - name: valid_issue_date
+    description: A data de emissão deve ser convertível para DATE.
+    severity: error
+
+  - name: valid_expense_value
+    description: O valor da despesa deve ser convertível para DECIMAL(18,2).
+    severity: error
+
+  - name: partition_month_consistency
+    description: >
+      O mês informado no registro deve corresponder ao mês presente no caminho
+      da partição Bronze.
+    severity: error
+
+  - name: exact_duplicates
+    description: >
+      Não devem existir registros de despesas exatamente iguais dentro do
+      mesmo exercício e mês.
+    severity: error
+
+observed_profile:
+  profiled_at: "2026-09-18"
+  municipality: salto
+  period_start: "2020-01"
+  period_end: "2026-09"
+  selected_snapshots: 81
+  total_records: 300149
+  invalid_months: 0
+  partition_month_mismatches: 0
+  invalid_monetary_values: 0
+  invalid_dates: 0
+  exact_duplicate_groups: 0
+  null_or_empty_values: 0
