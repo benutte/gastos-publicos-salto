@@ -643,6 +643,236 @@ Parâmetros operacionais ficam em YAML para que mudanças de município, caminho
 
 A suíte automatizada substitui as chamadas HTTP reais por respostas controladas, tornando os testes rápidos, determinísticos e independentes da disponibilidade da API.
 
+## Orquestração com Apache Airflow
+
+O pipeline é orquestrado localmente com Apache Airflow executado em contêineres Docker.
+
+A infraestrutura utiliza:
+
+- Apache Airflow 3.3.2;
+- LocalExecutor;
+- PostgreSQL 16 para metadados;
+- Docker Compose;
+- imagem customizada com as dependências do projeto;
+- API Server;
+- Scheduler;
+- DAG Processor.
+
+A imagem customizada contém:
+
+- Python 3.12;
+- HTTPX;
+- PyYAML;
+- DuckDB;
+- dbt Core;
+- dbt-duckdb;
+- pytest.
+
+### Serviços
+
+O arquivo `compose.yml` define os seguintes serviços:
+
+```text
+postgres
+airflow-init
+airflow-api-server
+airflow-scheduler
+airflow-dag-processor
+```
+
+O PostgreSQL armazena os metadados operacionais do Airflow.
+
+O `airflow-init` executa as migrações necessárias no banco de metadados.
+
+O API Server disponibiliza a interface web e as APIs internas do Airflow.
+
+O Scheduler utiliza o LocalExecutor para iniciar as tarefas do pipeline.
+
+O DAG Processor monitora e processa os arquivos Python presentes em `airflow/dags/`.
+
+### Iniciar o Airflow
+
+Certifique-se de que o Docker Desktop esteja aberto e com a integração WSL2 ativa.
+
+Na raiz do projeto, execute:
+
+```bash
+docker compose up -d
+```
+
+Verifique o estado dos serviços:
+
+```bash
+docker compose ps
+```
+
+A interface do Airflow fica disponível em:
+
+```text
+http://localhost:8080
+```
+
+### Parar o Airflow
+
+Para encerrar os serviços preservando o banco de metadados:
+
+```bash
+docker compose down
+```
+
+Não utilize `docker compose down -v` em uma parada comum, pois a opção `-v` também remove o volume do PostgreSQL.
+
+### DAG do pipeline
+
+A DAG principal é:
+
+```text
+gastos_publicos_salto
+```
+
+Arquivo:
+
+```text
+airflow/dags/gastos_publicos_pipeline.py
+```
+
+Fluxo de tarefas:
+
+```text
+atualizar_bronze
+        |
+        v
+transformar_e_testar
+```
+
+A tarefa `atualizar_bronze` executa a atualização recorrente da camada Bronze.
+
+A tarefa `transformar_e_testar` executa o `dbt build`, reconstruindo Silver e Gold e executando todos os testes de qualidade.
+
+A transformação só começa quando a ingestão termina com sucesso.
+
+### Agendamento
+
+A DAG está agendada para:
+
+```text
+Toda segunda-feira, às 06:00
+Fuso horário: America/Sao_Paulo
+```
+
+A configuração utiliza:
+
+- `catchup=False`, para impedir execuções retroativas;
+- `max_active_runs=1`, para impedir duas execuções simultâneas;
+- duas novas tentativas por tarefa;
+- intervalo de cinco minutos entre tentativas.
+
+### Execução manual segura
+
+Para disparar a DAG sem acessar a API:
+
+```bash
+docker compose exec airflow-scheduler \
+  airflow dags trigger gastos_publicos_salto \
+  --conf '{"dry_run": true}'
+```
+
+Nesse modo:
+
+1. a Bronze apresenta o plano de atualização;
+2. nenhuma requisição é enviada à API;
+3. nenhum snapshot Bronze é criado;
+4. o `dbt build` é executado normalmente;
+5. Silver, Gold e os testes são validados.
+
+### Execução manual real
+
+Para executar o pipeline completo:
+
+```bash
+docker compose exec airflow-scheduler \
+  airflow dags trigger gastos_publicos_salto
+```
+
+A última execução real validada apresentou:
+
+- 42 extrações planejadas;
+- 38 respostas com dados;
+- 4 respostas vazias válidas;
+- nenhuma falha;
+- 21 snapshots de despesas;
+- 21 snapshots de receitas;
+- 42 arquivos Bronze confirmados no manifesto;
+- 12 modelos dbt materializados;
+- 109 testes dbt aprovados;
+- 121 recursos aprovados;
+- nenhum aviso;
+- nenhum erro;
+- nenhum recurso ignorado.
+
+### Autenticação interna
+
+Os componentes do Airflow utilizam um segredo JWT compartilhado para comunicação interna entre Scheduler, processos de tarefa e API Server.
+
+O segredo é definido localmente no arquivo `.env`:
+
+```text
+AIRFLOW_JWT_SECRET
+```
+
+O arquivo `.env` não é versionado no Git.
+
+### Persistência e volumes
+
+O repositório é montado nos contêineres em:
+
+```text
+/opt/airflow/project
+```
+
+Isso permite que as tarefas acessem:
+
+```text
+src/
+config/
+data/
+scripts/
+transform/
+airflow/
+```
+
+Os metadados do Airflow são armazenados em um volume Docker persistente.
+
+Os JSON da Bronze, o catálogo DuckLake e os arquivos analíticos permanecem no diretório local `data/`, fora do controle de versão.
+
+### Comandos de diagnóstico
+
+Listar erros de importação das DAGs:
+
+```bash
+docker compose exec airflow-scheduler \
+  airflow dags list-import-errors
+```
+
+Listar as tarefas da DAG:
+
+```bash
+docker compose exec airflow-scheduler \
+  airflow tasks list gastos_publicos_salto
+```
+
+Acompanhar logs do Scheduler:
+
+```bash
+docker compose logs -f airflow-scheduler
+```
+
+Validar o Docker Compose sem iniciar os serviços:
+
+```bash
+docker compose config --quiet
+```
+
 ## Próximas etapas
 
 Com as camadas Bronze, Silver e Gold implementadas, as próximas etapas planejadas são:
