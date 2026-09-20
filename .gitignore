@@ -25,3 +25,8 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Apache Airflow
+.env
+airflow/logs/
+airflow/plugins/__pycache__/
