@@ -40,7 +40,10 @@ with DAG(
     atualizar_bronze = BashOperator(
         task_id="atualizar_bronze",
         bash_command=(
-            "python -m src.ingestion.tce_sp.recurring"
+            "python -m src.ingestion.tce_sp.recurring "
+            "{% if dag_run and dag_run.conf.get('dry_run', false) %}"
+            "--dry-run"
+            "{% endif %}"
         ),
         cwd=PROJECT_ROOT,
         execution_timeout=timedelta(hours=2),
