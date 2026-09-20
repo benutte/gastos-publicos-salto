@@ -6,7 +6,7 @@ gastos_publicos:
       type: duckdb
       path: ":memory:"
       schema: main
-      threads: 4
+      threads: 1
 
       extensions:
         - ducklake
