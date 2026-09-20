@@ -756,7 +756,7 @@ A transformação só começa quando a ingestão termina com sucesso.
 A DAG está agendada para:
 
 ```text
-Toda segunda-feira, às 06:00
+Toda segunda-feira, às 10:00
 Fuso horário: America/Sao_Paulo
 ```
 
