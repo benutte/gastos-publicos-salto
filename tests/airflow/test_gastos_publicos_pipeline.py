@@ -28,15 +28,17 @@ def test_dag_contains_expected_tasks() -> None:
     assert set(dag.task_ids) == {
         "atualizar_bronze",
         "transformar_e_testar",
+        "exportar_power_bi",
     }
 
 
-def test_transformation_depends_on_bronze_update() -> None:
-    """Garante que a transformação execute depois da ingestão."""
+def test_pipeline_task_dependencies() -> None:
+    """Garante a ordem entre ingestão, transformação e exportação."""
     dag = load_dag()
 
     atualizar_bronze = dag.get_task("atualizar_bronze")
     transformar_e_testar = dag.get_task("transformar_e_testar")
+    exportar_power_bi = dag.get_task("exportar_power_bi")
 
     assert atualizar_bronze.downstream_task_ids == {
         "transformar_e_testar"
@@ -44,6 +46,13 @@ def test_transformation_depends_on_bronze_update() -> None:
     assert transformar_e_testar.upstream_task_ids == {
         "atualizar_bronze"
     }
+    assert transformar_e_testar.downstream_task_ids == {
+        "exportar_power_bi"
+    }
+    assert exportar_power_bi.upstream_task_ids == {
+        "transformar_e_testar"
+    }
+
 
 
 def test_dag_operational_configuration() -> None:
@@ -61,8 +70,12 @@ def test_tasks_have_retries_and_timeouts() -> None:
 
     atualizar_bronze = dag.get_task("atualizar_bronze")
     transformar_e_testar = dag.get_task("transformar_e_testar")
+    exportar_power_bi = dag.get_task("exportar_power_bi")
+
 
     assert atualizar_bronze.retries == 2
     assert transformar_e_testar.retries == 2
     assert atualizar_bronze.execution_timeout is not None
     assert transformar_e_testar.execution_timeout is not None
+    assert exportar_power_bi.retries == 2
+    assert exportar_power_bi.execution_timeout is not None

@@ -56,4 +56,11 @@ with DAG(
         execution_timeout=timedelta(minutes=30),
     )
 
-    atualizar_bronze >> transformar_e_testar
+    exportar_power_bi = BashOperator(
+        task_id="exportar_power_bi",
+        bash_command="python -m src.serving.export_power_bi",
+        cwd=PROJECT_ROOT,
+        execution_timeout=timedelta(minutes=15),
+    )
+
+    atualizar_bronze >> transformar_e_testar >> exportar_power_bi

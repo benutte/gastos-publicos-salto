@@ -51,7 +51,10 @@ def create_lakehouse_connection(
             f"""
             ATTACH 'ducklake:{catalog_path}'
             AS {DEFAULT_CATALOG_NAME}
-            (DATA_PATH '{data_path}/')
+            (
+                DATA_PATH '{data_path}/',
+                OVERRIDE_DATA_PATH true
+            )
             """
         )
     except Exception:
