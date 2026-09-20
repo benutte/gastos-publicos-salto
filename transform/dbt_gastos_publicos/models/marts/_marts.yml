@@ -298,10 +298,6 @@ models:
         data_tests:
           - not_null
 
-      - name: arquivo_origem
-        description: Snapshot Bronze que originou o registro.
-        data_tests:
-          - not_null
 
   - name: fct_receitas
     description: >
@@ -435,7 +431,3 @@ models:
           Classificação original da subalínea. Pode ser nula quando a fonte
           não disponibiliza essa informação.
 
-      - name: arquivo_origem
-        description: Snapshot Bronze que originou o registro.
-        data_tests:
-          - not_null

@@ -3,7 +3,6 @@
         materialized="table"
     )
 }}
-
 with despesas_com_chaves_de_negocio as (
 
     select
@@ -63,8 +62,7 @@ despesas_com_chaves_dimensionais as (
         -- Os atributos originais são mantidos como dimensões degeneradas e
         -- campos de auditoria, mesmo existindo dimensões relacionadas.
         despesas.id_fornecedor,
-        despesas.nm_fornecedor as nm_fornecedor_origem,
-        despesas.arquivo_origem
+        despesas.nm_fornecedor as nm_fornecedor_origem
 
     from despesas_com_chaves_de_negocio as despesas
 
@@ -93,7 +91,6 @@ select
     dt_emissao_despesa,
     vl_despesa,
     id_fornecedor,
-    nm_fornecedor_origem,
-    arquivo_origem
+    nm_fornecedor_origem
 
 from despesas_com_chaves_dimensionais

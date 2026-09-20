@@ -129,8 +129,7 @@ dimensao_final as (
         ds_fonte_recurso,
         ds_cd_aplicacao_fixo,
         ds_alinea,
-        ds_subalinea,
-        arquivo_origem
+        ds_subalinea
 
     from receitas_com_ocorrencia
 
@@ -154,7 +153,6 @@ select
     ds_fonte_recurso,
     ds_cd_aplicacao_fixo,
     ds_alinea,
-    ds_subalinea,
-    arquivo_origem
+    ds_subalinea
 
 from dimensao_final
