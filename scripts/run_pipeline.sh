@@ -37,14 +37,19 @@ echo "Início do pipeline de gastos públicos"
 echo "========================================"
 
 echo
-echo "[1/2] Atualizando a camada Bronze..."
+echo "[1/3] Atualizando a camada Bronze..."
 
 "${VENV_PYTHON}" -m src.ingestion.tce_sp.recurring "$@"
 
 echo
-echo "[2/2] Reconstruindo Silver e Gold..."
+echo "[2/3] Reconstruindo Silver e Gold..."
 
 "${DBT_WRAPPER}" build
+
+echo
+echo "[3/3] Exportando a Gold para o Power BI..."
+
+"${VENV_PYTHON}" -m src.serving.export_power_bi
 
 echo
 echo "========================================"
