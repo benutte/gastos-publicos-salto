@@ -16,3 +16,4 @@ gastos_publicos:
           alias: gastos_publicos
           options:
             data_path: "{{ env_var('PWD') }}/data/lakehouse/files/"
+            override_data_path: true
