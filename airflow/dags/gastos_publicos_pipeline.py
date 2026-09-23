@@ -5,7 +5,10 @@ from datetime import timedelta
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG
-
+from src.observability.airflow_callbacks import (
+    record_dag_failure,
+    record_dag_success,
+)
 
 PROJECT_ROOT = "/opt/airflow/project"
 
@@ -31,6 +34,8 @@ with DAG(
     schedule="0 10 * * 1",
     catchup=False,
     max_active_runs=1,
+    on_success_callback=record_dag_success,
+    on_failure_callback=record_dag_failure,
     tags=[
         "tce-sp",
         "salto",
