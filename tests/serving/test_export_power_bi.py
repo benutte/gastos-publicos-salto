@@ -41,6 +41,7 @@ def test_exports_all_gold_tables(tmp_path: Path) -> None:
             output_path=output_path,
             source_catalog="memory",
             source_schema="gold",
+            manifest_path=None,
         )
     finally:
         connection.close()
@@ -112,6 +113,7 @@ def test_replaces_existing_file_only_after_success(
             output_path=output_path,
             source_catalog="memory",
             source_schema="gold",
+            manifest_path=None,
         )
     finally:
         source_connection.close()
@@ -164,6 +166,7 @@ def test_preserves_existing_file_when_export_fails(
                 output_path=output_path,
                 source_catalog="memory",
                 source_schema="gold",
+                manifest_path=None,
             )
     finally:
         source_connection.close()

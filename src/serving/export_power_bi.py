@@ -6,11 +6,15 @@ from pathlib import Path
 import duckdb
 
 from src.lakehouse.connection import create_lakehouse_connection
+from src.observability.ingestion_runs import read_ingestion_manifest
 
 
 DEFAULT_OUTPUT_PATH = Path("data/bi/gastos_publicos.duckdb")
 DEFAULT_SOURCE_CATALOG = "gastos_publicos"
 DEFAULT_SOURCE_SCHEMA = "gold"
+DEFAULT_MANIFEST_PATH = Path(
+    "data/metadata/ingestion_manifest.jsonl"
+)
 
 GOLD_TABLES = (
     "dim_municipio",
@@ -40,12 +44,110 @@ def remove_temporary_files(temporary_path: Path) -> None:
     temporary_path.unlink(missing_ok=True)
     temporary_wal_path.unlink(missing_ok=True)
 
+def create_ingestion_runs_table(
+    connection: duckdb.DuckDBPyConnection,
+    manifest_path: Path,
+) -> int:
+    """Cria a tabela operacional a partir do manifesto Bronze.
+
+    Args:
+        connection: Conexão com a base de destino anexada como power_bi.
+        manifest_path: Caminho do manifesto JSON Lines.
+
+    Returns:
+        Quantidade de execuções inseridas.
+    """
+    records = read_ingestion_manifest(manifest_path)
+
+    connection.execute(
+        """
+        CREATE SCHEMA power_bi.ops
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE TABLE power_bi.ops.ingestion_runs (
+            run_id VARCHAR,
+            status VARCHAR,
+            dataset VARCHAR,
+            municipality VARCHAR,
+            year INTEGER,
+            month INTEGER,
+            source_url VARCHAR,
+            record_count BIGINT,
+            content_length_bytes BIGINT,
+            sha256 VARCHAR,
+            started_at_utc TIMESTAMPTZ,
+            completed_at_utc TIMESTAMPTZ,
+            duration_seconds DOUBLE,
+            output_path VARCHAR,
+            error_type VARCHAR,
+            error_message VARCHAR,
+            manifest_line_number BIGINT
+        )
+        """
+    )
+
+    if not records:
+        return 0
+
+    rows = [
+        (
+            record["run_id"],
+            record["status"],
+            record["dataset"],
+            record["municipality"],
+            record["year"],
+            record["month"],
+            record["source_url"],
+            record["record_count"],
+            record["content_length_bytes"],
+            record["sha256"],
+            record["started_at_utc"],
+            record["completed_at_utc"],
+            record["duration_seconds"],
+            record["output_path"],
+            record["error_type"],
+            record["error_message"],
+            record["manifest_line_number"],
+        )
+        for record in records
+    ]
+
+    connection.executemany(
+        """
+        INSERT INTO power_bi.ops.ingestion_runs
+        VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?
+        )
+        """,
+        rows,
+    )
+
+    destination_count = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM power_bi.ops.ingestion_runs
+        """
+    ).fetchone()[0]
+
+    if destination_count != len(records):
+        raise RuntimeError(
+            "Divergência na exportação do manifesto: "
+            f"origem={len(records)}, "
+            f"destino={destination_count}."
+        )
+
+    return int(destination_count)
 
 def export_gold_to_duckdb(
     connection: duckdb.DuckDBPyConnection,
     output_path: Path = DEFAULT_OUTPUT_PATH,
     source_catalog: str = DEFAULT_SOURCE_CATALOG,
     source_schema: str = DEFAULT_SOURCE_SCHEMA,
+    manifest_path: Path | None = DEFAULT_MANIFEST_PATH,
 ) -> dict[str, int]:
     """Exporta as tabelas Gold para um arquivo DuckDB independente.
 
@@ -129,7 +231,16 @@ def export_gold_to_duckdb(
                 )
 
             exported_counts[table_name] = int(destination_count)
+            
+        if manifest_path is not None:
+            ingestion_runs_count = create_ingestion_runs_table(
+                connection=connection,
+                manifest_path=manifest_path,
+            )
 
+            exported_counts["ops.ingestion_runs"] = (
+                ingestion_runs_count
+            )
         connection.execute(
             """
             CHECKPOINT power_bi

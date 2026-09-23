@@ -42,8 +42,6 @@ def normalize_manifest_record(
         "municipality",
         "year",
         "month",
-        "started_at_utc",
-        "completed_at_utc",
     }
 
     missing_fields = sorted(
@@ -66,10 +64,12 @@ def normalize_manifest_record(
         )
 
     started_at = parse_utc_datetime(
-        record["started_at_utc"]
+        record.get("started_at_utc")
     )
+
     completed_at = parse_utc_datetime(
-        record["completed_at_utc"]
+        record.get("completed_at_utc")
+        or record.get("extracted_at_utc")
     )
 
     return {
