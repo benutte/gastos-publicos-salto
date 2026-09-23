@@ -7,6 +7,7 @@ import duckdb
 
 from src.lakehouse.connection import create_lakehouse_connection
 from src.observability.ingestion_runs import read_ingestion_manifest
+from src.observability.pipeline_runs import read_pipeline_runs
 
 
 DEFAULT_OUTPUT_PATH = Path("data/bi/gastos_publicos.duckdb")
@@ -14,6 +15,9 @@ DEFAULT_SOURCE_CATALOG = "gastos_publicos"
 DEFAULT_SOURCE_SCHEMA = "gold"
 DEFAULT_MANIFEST_PATH = Path(
     "data/metadata/ingestion_manifest.jsonl"
+)
+DEFAULT_PIPELINE_RUNS_PATH = Path(
+    "data/metadata/pipeline_runs.jsonl"
 )
 
 GOLD_TABLES = (
@@ -142,12 +146,94 @@ def create_ingestion_runs_table(
 
     return int(destination_count)
 
+def create_pipeline_runs_table(
+    connection: duckdb.DuckDBPyConnection,
+    pipeline_runs_path: Path,
+) -> int:
+    """Cria a tabela operacional das execuções completas do pipeline.
+
+    Args:
+        connection: Conexão com a base de destino anexada como power_bi.
+        pipeline_runs_path: Caminho do manifesto JSON Lines do pipeline.
+
+    Returns:
+        Quantidade de execuções inseridas.
+    """
+    records = read_pipeline_runs(
+        input_path=pipeline_runs_path,
+    )
+
+    connection.execute(
+        """
+        CREATE TABLE power_bi.ops.pipeline_runs (
+            run_id VARCHAR,
+            execution_source VARCHAR,
+            status VARCHAR,
+            dry_run BOOLEAN,
+            started_at_utc TIMESTAMPTZ,
+            completed_at_utc TIMESTAMPTZ,
+            duration_seconds DOUBLE,
+            failed_stage VARCHAR,
+            error_message VARCHAR,
+            manifest_line_number BIGINT
+        )
+        """
+    )
+
+    if not records:
+        return 0
+
+    rows = [
+        (
+            record["run_id"],
+            record["execution_source"],
+            record["status"],
+            record["dry_run"],
+            record["started_at_utc"],
+            record["completed_at_utc"],
+            record["duration_seconds"],
+            record["failed_stage"],
+            record["error_message"],
+            record["manifest_line_number"],
+        )
+        for record in records
+    ]
+
+    connection.executemany(
+        """
+        INSERT INTO power_bi.ops.pipeline_runs
+        VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+        """,
+        rows,
+    )
+
+    destination_count = connection.execute(
+        """
+        SELECT COUNT(*)
+        FROM power_bi.ops.pipeline_runs
+        """
+    ).fetchone()[0]
+
+    if destination_count != len(records):
+        raise RuntimeError(
+            "Divergência na exportação das execuções do pipeline: "
+            f"origem={len(records)}, "
+            f"destino={destination_count}."
+        )
+
+    return int(destination_count)
+
+
+
 def export_gold_to_duckdb(
     connection: duckdb.DuckDBPyConnection,
     output_path: Path = DEFAULT_OUTPUT_PATH,
     source_catalog: str = DEFAULT_SOURCE_CATALOG,
     source_schema: str = DEFAULT_SOURCE_SCHEMA,
     manifest_path: Path | None = DEFAULT_MANIFEST_PATH,
+    pipeline_runs_path: Path | None = DEFAULT_PIPELINE_RUNS_PATH,
 ) -> dict[str, int]:
     """Exporta as tabelas Gold para um arquivo DuckDB independente.
 
@@ -231,7 +317,7 @@ def export_gold_to_duckdb(
                 )
 
             exported_counts[table_name] = int(destination_count)
-            
+
         if manifest_path is not None:
             ingestion_runs_count = create_ingestion_runs_table(
                 connection=connection,
@@ -241,6 +327,17 @@ def export_gold_to_duckdb(
             exported_counts["ops.ingestion_runs"] = (
                 ingestion_runs_count
             )
+
+        if pipeline_runs_path is not None:
+            pipeline_runs_count = create_pipeline_runs_table(
+                connection=connection,
+                pipeline_runs_path=pipeline_runs_path,
+            )
+
+            exported_counts["ops.pipeline_runs"] = (
+                pipeline_runs_count
+            )
+
         connection.execute(
             """
             CHECKPOINT power_bi
