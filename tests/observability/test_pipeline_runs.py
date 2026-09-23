@@ -11,6 +11,11 @@ from src.observability.pipeline_runs import (
     build_pipeline_run_record,
 )
 
+from src.observability.pipeline_runs import (
+    append_pipeline_run,
+    build_pipeline_run_record,
+    read_pipeline_runs,
+)
 
 def test_builds_successful_pipeline_run() -> None:
     """Cria um registro de execução concluída com sucesso."""
@@ -158,3 +163,115 @@ def test_appends_pipeline_runs_as_json_lines(
     assert len(lines) == 2
     assert json.loads(lines[0]) == first_record
     assert json.loads(lines[1]) == second_record
+
+
+def test_reads_and_normalizes_pipeline_runs(
+    tmp_path: Path,
+) -> None:
+    """Lê e normaliza execuções completas do pipeline."""
+    input_path = tmp_path / "pipeline_runs.jsonl"
+
+    records = [
+        {
+            "run_id": "manual-001",
+            "execution_source": "manual",
+            "status": "success",
+            "dry_run": True,
+            "started_at_utc": (
+                "2026-09-23T10:00:00+00:00"
+            ),
+            "completed_at_utc": (
+                "2026-09-23T10:00:30+00:00"
+            ),
+            "duration_seconds": 30.0,
+            "failed_stage": None,
+            "error_message": None,
+        },
+        {
+            "run_id": "scheduled-001",
+            "execution_source": "scheduled",
+            "status": "failed",
+            "dry_run": False,
+            "started_at_utc": (
+                "2026-09-23T11:00:00+00:00"
+            ),
+            "completed_at_utc": (
+                "2026-09-23T11:00:45+00:00"
+            ),
+            "duration_seconds": 45.0,
+            "failed_stage": "transformar_e_testar",
+            "error_message": "dbt build falhou.",
+        },
+    ]
+
+    for record in records:
+        append_pipeline_run(
+            record=record,
+            output_path=input_path,
+        )
+
+    normalized_records = read_pipeline_runs(
+        input_path=input_path,
+    )
+
+    assert len(normalized_records) == 2
+
+    assert normalized_records[0]["run_id"] == "manual-001"
+    assert normalized_records[0]["status"] == "success"
+    assert normalized_records[0]["dry_run"] is True
+    assert normalized_records[0]["duration_seconds"] == 30.0
+    assert normalized_records[0]["manifest_line_number"] == 1
+
+    assert normalized_records[1]["status"] == "failed"
+    assert normalized_records[1]["failed_stage"] == (
+        "transformar_e_testar"
+    )
+    assert normalized_records[1]["manifest_line_number"] == 2
+
+
+def test_returns_empty_list_when_manifest_does_not_exist(
+    tmp_path: Path,
+) -> None:
+    """Retorna uma lista vazia quando ainda não há execuções."""
+    input_path = tmp_path / "missing.jsonl"
+
+    assert read_pipeline_runs(input_path=input_path) == []
+
+
+def test_rejects_invalid_pipeline_run_json(
+    tmp_path: Path,
+) -> None:
+    """Rejeita uma linha que não possui JSON válido."""
+    input_path = tmp_path / "pipeline_runs.jsonl"
+
+    input_path.write_text(
+        '{"run_id": "incompleto"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="JSON inválido no manifesto do pipeline",
+    ):
+        read_pipeline_runs(input_path=input_path)
+
+
+def test_rejects_pipeline_run_with_missing_fields(
+    tmp_path: Path,
+) -> None:
+    """Rejeita uma execução sem campos obrigatórios."""
+    input_path = tmp_path / "pipeline_runs.jsonl"
+
+    append_pipeline_run(
+        record={
+            "run_id": "run-001",
+            "status": "success",
+        },
+        output_path=input_path,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="campos obrigatórios ausentes",
+    ):
+        read_pipeline_runs(input_path=input_path)

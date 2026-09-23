@@ -89,3 +89,110 @@ def append_pipeline_run(
     ) as output_file:
         output_file.write(serialized_record)
         output_file.write("\n")
+
+def read_pipeline_runs(
+    input_path: Path = DEFAULT_PIPELINE_RUNS_PATH,
+) -> list[dict[str, Any]]:
+    """Lê e valida as execuções completas do pipeline.
+
+    Args:
+        input_path: Caminho do manifesto JSON Lines do pipeline.
+
+    Returns:
+        Lista de execuções normalizadas na ordem do manifesto.
+
+    Raises:
+        ValueError: Se uma linha estiver vazia, possuir JSON inválido,
+            campos obrigatórios ausentes ou status desconhecido.
+    """
+    if not input_path.exists():
+        return []
+
+    records: list[dict[str, Any]] = []
+
+    with input_path.open(
+        "r",
+        encoding="utf-8",
+    ) as input_file:
+        for line_number, line in enumerate(
+            input_file,
+            start=1,
+        ):
+            stripped_line = line.strip()
+
+            if not stripped_line:
+                raise ValueError(
+                    f"Linha {line_number}: linha vazia "
+                    "no manifesto do pipeline."
+                )
+
+            try:
+                record = json.loads(stripped_line)
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    f"Linha {line_number}: JSON inválido "
+                    "no manifesto do pipeline."
+                ) from error
+
+            if not isinstance(record, dict):
+                raise ValueError(
+                    f"Linha {line_number}: o registro deve "
+                    "ser um objeto JSON."
+                )
+
+            required_fields = {
+                "run_id",
+                "execution_source",
+                "status",
+                "dry_run",
+                "started_at_utc",
+                "completed_at_utc",
+                "duration_seconds",
+            }
+
+            missing_fields = sorted(
+                required_fields - record.keys()
+            )
+
+            if missing_fields:
+                raise ValueError(
+                    f"Linha {line_number}: campos obrigatórios "
+                    f"ausentes: {', '.join(missing_fields)}."
+                )
+
+            status = str(record["status"])
+
+            if status not in VALID_PIPELINE_STATUSES:
+                raise ValueError(
+                    f"Linha {line_number}: status inválido: "
+                    f"{status}."
+                )
+
+            records.append(
+                {
+                    "run_id": str(record["run_id"]),
+                    "execution_source": str(
+                        record["execution_source"]
+                    ),
+                    "status": status,
+                    "dry_run": bool(record["dry_run"]),
+                    "started_at_utc": datetime.fromisoformat(
+                        str(record["started_at_utc"])
+                    ),
+                    "completed_at_utc": datetime.fromisoformat(
+                        str(record["completed_at_utc"])
+                    ),
+                    "duration_seconds": float(
+                        record["duration_seconds"]
+                    ),
+                    "failed_stage": record.get(
+                        "failed_stage"
+                    ),
+                    "error_message": record.get(
+                        "error_message"
+                    ),
+                    "manifest_line_number": line_number,
+                }
+            )
+
+    return records
