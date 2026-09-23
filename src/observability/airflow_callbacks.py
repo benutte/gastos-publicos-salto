@@ -7,7 +7,8 @@ from src.observability.pipeline_runs import (
     append_pipeline_run,
     build_pipeline_run_record,
 )
-
+from src.lakehouse.connection import create_lakehouse_connection
+from src.serving.export_power_bi import export_gold_to_duckdb
 
 def get_execution_source(dag_run: Any) -> str:
     """Identifica se a execução foi manual ou agendada."""
@@ -68,13 +69,25 @@ def record_dag_result(
 
     append_pipeline_run(record)
 
+def refresh_power_bi_export() -> None:
+    """Atualiza a base de consumo após registrar a execução."""
+    connection = create_lakehouse_connection()
+
+    try:
+        export_gold_to_duckdb(
+            connection=connection,
+        )
+    finally:
+        connection.close()
 
 def record_dag_success(context: dict[str, Any]) -> None:
-    """Registra uma execução concluída com sucesso."""
+    """Registra o sucesso e atualiza a base de consumo."""
     record_dag_result(
         context=context,
         status="success",
     )
+
+    refresh_power_bi_export()
 
 
 def record_dag_failure(context: dict[str, Any]) -> None:
