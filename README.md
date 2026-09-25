@@ -14,26 +14,33 @@ O projeto utiliza o município de Salto/SP como escopo inicial e foi desenvolvid
 - Disponibilizar dados analíticos para consumo no Power BI.
 - Documentar decisões técnicas e boas práticas de engenharia de dados.
 
-## Arquitetura planejada
+## Arquitetura implementada
 
-```text
-API TCE-SP
-    |
-    v
+O pipeline utiliza uma arquitetura em medalhões, com orquestração pelo Apache Airflow e consumo analítico no Power BI.
+
+API de Transparência do TCE-SP
+        |
+        v
 Bronze
-JSON bruto, imutável e particionado
-    |
-    v
+Snapshots JSON brutos e imutáveis
+        |
+        v
 Silver
-Dados limpos e tipados com dbt
-    |
-    v
+Limpeza, tipagem e seleção dos snapshots mais recentes
+        |
+        v
 Gold
-Modelo dimensional para análise
-    |
-    v
+Modelo dimensional com dimensões e tabelas fato
+        |
+        v
+DuckDB de consumo
+Exportação das tabelas Gold e operacionais
+        |
+        v
 Power BI
-```
+Dashboards financeiros e monitoramento do pipeline
+
+O Apache Airflow orquestra as etapas de ingestão, transformação, testes e exportação. DuckDB, DuckLake e dbt formam a camada de processamento e armazenamento analítico.
 
 ## Status atual
 
