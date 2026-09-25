@@ -873,6 +873,26 @@ Validar o Docker Compose sem iniciar os serviços:
 docker compose config --quiet
 ```
 
+## Demonstração
+
+### Visão Executiva
+
+A página executiva consolida receitas, despesas, saldos, evolução mensal, órgãos e fornecedores em uma visão analítica integrada.
+
+docs/images/power-bi-visao-executiva.png
+
+### Monitoramento do Pipeline
+
+A página operacional acompanha as requisições à API e as execuções completas do pipeline, incluindo status, duração, registros processados, respostas vazias e falhas.
+
+docs/images/power-bi-monitoramento.png
+
+### Orquestração no Airflow
+
+O Apache Airflow coordena a atualização da Bronze, a reconstrução e os testes das camadas Silver e Gold, além da exportação da base de consumo utilizada pelo Power BI.
+
+docs/images/airflow-dag.png
+
 ## Próximas etapas
 
 Com as camadas Bronze, Silver e Gold implementadas, as próximas etapas planejadas são:
