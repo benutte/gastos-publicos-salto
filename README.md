@@ -1,131 +1,124 @@
 # Gastos Públicos Municipais
 
-Projeto de engenharia de dados para ingestão, transformação e análise de receitas e despesas municipais disponibilizadas pela API de Transparência do Tribunal de Contas do Estado de São Paulo, TCE-SP.
+Projeto de engenharia de dados para ingestão, transformação, orquestração, observabilidade e análise de receitas e despesas municipais disponibilizadas pela API de Transparência do Tribunal de Contas do Estado de São Paulo (TCE-SP).
 
-O projeto utiliza o município de Salto/SP como escopo inicial e foi desenvolvido com finalidade de aprendizado e portfólio, aplicando práticas atuais de engenharia de dados.
+O município de Salto/SP é utilizado como escopo inicial. O projeto foi desenvolvido para aprendizado e portfólio, aplicando práticas de engenharia de dados, arquitetura em medalhões, modelagem dimensional, testes automatizados, observabilidade e visualização no Power BI.
 
 ## Objetivos
 
-- Construir um pipeline de dados completo e reproduzível.
-- Aplicar arquitetura medalhão com camadas Bronze, Silver e Gold.
-- Implementar carga histórica e atualização incremental.
-- Aplicar testes automatizados e controles de qualidade.
-- Criar uma estrutura preparada para múltiplos municípios.
-- Disponibilizar dados analíticos para consumo no Power BI.
-- Documentar decisões técnicas e boas práticas de engenharia de dados.
+- Construir um pipeline de dados completo, reproduzível e auditável.
+- Aplicar arquitetura em medalhões com camadas Bronze, Silver e Gold.
+- Implementar carga histórica e atualização recorrente.
+- Preservar snapshots brutos e rastreabilidade técnica.
+- Aplicar testes automatizados, contratos e reconciliações financeiras.
+- Orquestrar ingestão, transformação e exportação com Apache Airflow.
+- Disponibilizar um modelo dimensional para consumo no Power BI.
+- Monitorar requisições à API e execuções completas do pipeline.
+- Manter uma estrutura preparada para expansão a outros municípios.
 
 ## Arquitetura implementada
 
-O pipeline utiliza uma arquitetura em medalhões, com orquestração pelo Apache Airflow e consumo analítico no Power BI.
-
+```text
 API de Transparência do TCE-SP
-        |
-        v
-Bronze
-Snapshots JSON brutos e imutáveis
-        |
-        v
-Silver
-Limpeza, tipagem e seleção dos snapshots mais recentes
-        |
-        v
-Gold
-Modelo dimensional com dimensões e tabelas fato
-        |
-        v
+                |
+                v
+Bronze - JSON bruto e imutável
+                |
+                v
+Silver - limpeza, tipagem e rastreabilidade
+                |
+                v
+Gold - modelo dimensional
+                |
+                v
 DuckDB de consumo
-Exportação das tabelas Gold e operacionais
+                |
+                v
+Power BI - análise e monitoramento
+```
+
+O Apache Airflow orquestra o fluxo de ponta a ponta:
+
+```text
+atualizar_bronze
         |
         v
-Power BI
-Dashboards financeiros e monitoramento do pipeline
+transformar_e_testar
+        |
+        v
+exportar_power_bi
+```
 
-O Apache Airflow orquestra as etapas de ingestão, transformação, testes e exportação. DuckDB, DuckLake e dbt formam a camada de processamento e armazenamento analítico.
+DuckDB, DuckLake e dbt formam a camada de processamento e armazenamento analítico. O banco de consumo reúne tabelas de negócio no schema `gold` e tabelas operacionais no schema `ops`.
 
 ## Status atual
 
-As camadas Bronze e Silver estão implementadas e validadas para o município de Salto/SP.
+O pipeline completo está implementado e validado para o município de Salto/SP:
+
+- ingestão histórica e recorrente da API do TCE-SP;
+- camada Bronze com snapshots imutáveis;
+- camadas Silver e Gold materializadas com dbt e DuckLake;
+- modelo dimensional com oito dimensões e duas tabelas fato;
+- orquestração com Apache Airflow e Docker Compose;
+- exportação atômica para um arquivo DuckDB de consumo;
+- dashboards analíticos e operacionais no Power BI;
+- observabilidade de requisições e execuções completas;
+- suíte automatizada de testes locais, dbt e Airflow.
 
 ### Camada Bronze
 
-Principais recursos concluídos:
+Principais recursos:
 
-- ingestão mensal de despesas e receitas da API do TCE-SP;
-- armazenamento de respostas JSON brutas e imutáveis;
+- ingestão mensal de despesas e receitas;
 - particionamento por dataset, município, exercício e mês;
-- criação de snapshots com timestamp UTC;
-- escrita atômica dos arquivos;
-- manifesto de execução com metadados, hash SHA-256 e status;
-- retry com backoff exponencial para falhas temporárias;
+- snapshots JSON imutáveis com timestamp UTC;
+- escrita atômica com arquivo temporário;
+- preservação de respostas vazias válidas;
+- manifesto JSON Lines com status, quantidade de registros, tamanho, hash SHA-256, horários, caminho e erros;
+- retry com backoff exponencial;
 - suporte ao cabeçalho HTTP `Retry-After`;
 - CLI para extrações mensais;
-- planejamento e execução de backfill histórico;
-- continuidade do lote após falhas individuais;
-- dry-run para inspeção do plano de backfill;
-- testes automatizados sem acesso real à API durante a suíte.
+- backfill histórico;
+- atualização recorrente do exercício anterior e do exercício corrente;
+- modo `dry-run`;
+- continuidade do lote após falhas individuais.
 
-O backfill de janeiro de 2020 a setembro de 2026 foi concluído:
-
-- 162 extrações processadas;
-- 158 extrações com dados;
-- 4 respostas vazias válidas;
-- nenhuma falha.
-
-As respostas vazias correspondem às receitas e despesas de agosto e setembro de 2026. Elas foram preservadas como arquivos JSON contendo uma lista vazia e registradas no manifesto com o status `empty`.
-
-A Bronze possui 88 arquivos físicos por dataset. Algumas partições de 2026 possuem mais de um snapshot devido a reexecuções. Os arquivos anteriores são preservados para auditoria, mas apenas o snapshot mais recente de cada partição mensal é enviado para a Silver.
+O backfill inicial compreendeu janeiro de 2020 a setembro de 2026. Reexecuções posteriores criam novos snapshots sem sobrescrever versões anteriores. A Silver utiliza apenas o snapshot mais recente de cada partição mensal.
 
 ### Camada Silver
 
-A camada Silver utiliza dbt Core, DuckDB e DuckLake para selecionar, limpar, tipar, testar e materializar os dados da Bronze.
+A Silver utiliza dbt Core, DuckDB e DuckLake para selecionar, limpar, tipar e materializar os dados da Bronze.
 
-Modelos implementados:
+Modelos:
 
 - `stg_despesas`;
 - `stg_receitas`.
 
-Volumes materializados:
+Transformações principais:
 
-- 300.149 registros de despesas;
-- 14.354 registros de receitas;
-- 81 snapshots mensais selecionados por dataset.
-
-Transformações implementadas:
-
-- seleção do snapshot mais recente de cada partição mensal;
-- conversão do nome do mês para número inteiro;
-- conversão de datas do formato `DD/MM/AAAA` para `DATE`;
-- conversão de valores monetários brasileiros para `DECIMAL(18,2)`;
+- seleção do snapshot mais recente de cada partição;
+- conversão do mês textual para número inteiro;
+- conversão de datas de `DD/MM/AAAA` para `DATE`;
+- conversão de valores monetários para `DECIMAL(18,2)`;
 - normalização de strings vazias de subalínea para `NULL`;
-- preservação do arquivo Bronze de origem para rastreabilidade;
-- desativação do particionamento Hive automático durante a leitura dos JSON;
-- preservação de valores financeiros positivos, negativos e iguais a zero.
+- preservação de `arquivo_origem` para auditoria técnica;
+- preservação de valores positivos, negativos e iguais a zero;
+- validação de consistência entre partição e conteúdo.
 
-A inspeção histórica identificou o evento de despesa `Reforço`, que foi incluído nos valores aceitos pelo contrato da Silver.
+A Silver preserva todas as ocorrências da fonte. As receitas podem conter registros com atributos idênticos, mas a API não fornece chave transacional nem data de arrecadação suficiente para distinguir duplicidades técnicas de lançamentos legítimos.
 
-As receitas possuem 56 grupos de registros com atributos idênticos dentro do mesmo exercício, correspondentes a 70 linhas adicionais. Como a API não fornece chave transacional ou data de arrecadação que permita distinguir duplicidades técnicas de lançamentos legítimos, nenhuma linha é removida automaticamente.
-
-Qualidade e validação:
-
-- 27 testes Python aprovados;
-- 23 testes genéricos do dbt;
-- 2 testes SQL personalizados;
-- 25 testes dbt aprovados;
-- `dbt build` concluído com 27 recursos aprovados;
-- nenhuma falha, aviso ou recurso ignorado na última validação.
-
-As tabelas atuais estão materializadas no catálogo DuckLake:
+Tabelas:
 
 ```text
 gastos_publicos.silver.stg_despesas
 gastos_publicos.silver.stg_receitas
-
 ```
+
 ### Camada Gold
 
-A camada Gold utiliza modelagem dimensional para disponibilizar dados analíticos preparados para consumo no Power BI.
+A Gold contém um modelo dimensional voltado ao consumo analítico. Metadados físicos, como o caminho do arquivo Bronze, permanecem na Silver e não são expostos nas tabelas fato.
 
-Dimensões implementadas:
+Dimensões:
 
 - `dim_municipio`;
 - `dim_orgao`;
@@ -136,41 +129,29 @@ Dimensões implementadas:
 - `dim_alinea`;
 - `dim_subalinea`.
 
-Tabelas fato implementadas:
+Tabelas fato:
 
 - `fct_despesas`;
 - `fct_receitas`.
 
-Volumes materializados:
+Volumes de referência da última validação documentada:
 
 - 300.149 eventos de despesas;
 - 14.354 ocorrências de receitas;
 - 6.063 fornecedores dimensionais;
-- 81 períodos mensais na dimensão de tempo;
+- 81 períodos mensais;
 - 5 fontes de recurso;
 - 60 aplicações fixas;
 - 110 alíneas;
-- 148 membros na dimensão de subalínea.
+- 148 membros de subalínea.
 
-A dimensão de tempo mantém um calendário contínuo de janeiro de 2020 a setembro de 2026, incluindo períodos sem registros financeiros.
+A dimensão de tempo mantém um calendário mensal contínuo entre janeiro de 2020 e setembro de 2026. A dimensão de subalínea inclui o membro especial `Não informada` para registros sem esse detalhamento.
 
-A dimensão de subalínea possui um membro especial `Não informada`, utilizado pelas 9.008 receitas cuja fonte não disponibilizou essa classificação.
+Pessoas físicas utilizam uma chave de negócio composta por identificador e nome para evitar que indivíduos diferentes sejam agrupados por um código reutilizado pela fonte. Para os demais tipos, a chave deriva do identificador original.
 
-A modelagem de fornecedores utiliza regras diferentes conforme o tipo de identificação. Pessoas físicas utilizam a combinação entre identificador e nome para evitar que pessoas diferentes sejam agrupadas incorretamente.
+A fato de receitas preserva todas as ocorrências. Uma impressão digital identifica o conteúdo, enquanto um número de ocorrência distingue linhas idênticas sem afirmar que se trata de uma chave oficial da API.
 
-A tabela `fct_receitas` preserva todas as ocorrências da API. Registros com atributos idênticos não são removidos porque a fonte não disponibiliza informações suficientes para determinar se representam duplicidades técnicas.
-
-Validação integrada da transformação:
-
-- 12 modelos dbt materializados;
-- 109 testes dbt executados;
-- 121 recursos aprovados pelo `dbt build`;
-- nenhuma falha;
-- nenhum aviso;
-- nenhum recurso ignorado;
-- reconciliação financeira completa entre Silver e Gold.
-
-Tabelas fato materializadas:
+Tabelas:
 
 ```text
 gastos_publicos.gold.fct_despesas
@@ -179,7 +160,7 @@ gastos_publicos.gold.fct_receitas
 
 ## Fonte e escopo dos dados
 
-Os dados são obtidos pela API de Transparência do Tribunal de Contas do Estado de São Paulo, TCE-SP.
+Fonte: API de Transparência do TCE-SP.
 
 URL base:
 
@@ -195,21 +176,19 @@ Endpoints utilizados:
 /receitas/{municipio}/{exercicio}/{mes}
 ```
 
-A API exige uma requisição separada para cada combinação de dataset, município, exercício e mês.
-
 Escopo atual:
 
 - município: Salto/SP;
-- identificador utilizado pela API: `salto`;
+- identificador da API: `salto`;
 - período histórico: janeiro de 2020 até o exercício corrente;
 - datasets: despesas e receitas municipais;
 - granularidade da extração: mensal.
 
-A estrutura foi preparada para permitir a inclusão futura de outros municípios sem alterar o fluxo principal de ingestão.
+A API exige uma requisição para cada combinação de dataset, município, exercício e mês.
 
 ## Dados de despesas
 
-Campos confirmados na resposta da API:
+Campos da fonte:
 
 - `orgao`;
 - `mes`;
@@ -220,16 +199,19 @@ Campos confirmados na resposta da API:
 - `dt_emissao_despesa`;
 - `vl_despesa`.
 
-Valores conhecidos do campo `evento`:
+Eventos observados:
 
 - `Anulação`;
 - `Empenhado`;
+- `Reforço`;
 - `Valor Liquidado`;
 - `Valor Pago`.
 
+Os valores não devem ser somados indiscriminadamente entre eventos, pois representam estágios e ajustes distintos da execução da despesa.
+
 ## Dados de receitas
 
-Campos confirmados na resposta da API:
+Campos da fonte:
 
 - `orgao`;
 - `mes`;
@@ -241,92 +223,65 @@ Campos confirmados na resposta da API:
 
 ## Stack técnica
 
-### Implementada na camada Bronze
-
 - Python 3.12;
 - HTTPX;
 - PyYAML;
 - pytest;
-- Git;
-- GitHub;
-- WSL2.
-
-### Planejada para as próximas camadas
-
 - DuckDB;
 - DuckLake;
 - dbt Core;
-- Apache Airflow;
-- Docker;
-- Power BI;
-- OpenRouter.
-
-## Ambiente de desenvolvimento
-
-O projeto foi desenvolvido inicialmente no seguinte ambiente:
-
-- Windows com WSL2;
-- Ubuntu 24.04 LTS;
-- Python 3.12;
-- ambiente virtual Python em `.venv`;
-- Docker Desktop instalado;
-- código armazenado no sistema de arquivos Linux do WSL.
-
-Diretório utilizado no ambiente de desenvolvimento:
-
-```text
-/home/phili/projects/gastos-publicos-salto
-```
-
-Manter o projeto no sistema de arquivos Linux, em vez de utilizar `/mnt/c`, reduz problemas de desempenho e permissões ao trabalhar com ferramentas executadas dentro do WSL.
+- dbt-duckdb;
+- Apache Airflow 3.3.2;
+- PostgreSQL 16;
+- Docker Desktop;
+- Docker Compose;
+- Power BI Desktop;
+- DuckDB ODBC e conector Power Query;
+- Git e GitHub;
+- Windows com WSL2 e Ubuntu 24.04 LTS.
 
 ## Estrutura do projeto
 
 ```text
 gastos-publicos-salto/
+├── airflow/
+│   ├── dags/
+│   ├── logs/
+│   └── plugins/
 ├── config/
 │   ├── data_contracts/
 │   └── ingestion.yml
+├── docker/
+│   └── airflow/
+├── docs/
+│   ├── adr/
+│   └── images/
+├── scripts/
+│   ├── dbt.sh
+│   ├── run_pipeline.sh
+│   └── test_all.sh
 ├── src/
-│   ├── __init__.py
-│   └── ingestion/
-│       ├── __init__.py
-│       └── tce_sp/
-│           ├── __init__.py
-│           ├── __main__.py
-│           ├── api_client.py
-│           ├── backfill.py
-│           ├── batch.py
-│           ├── config.py
-│           ├── extractor.py
-│           ├── manifest.py
-│           ├── planner.py
-│           └── storage.py
+│   ├── ingestion/
+│   ├── lakehouse/
+│   ├── observability/
+│   └── serving/
 ├── tests/
-│   ├── test_api_client.py
-│   ├── test_batch.py
-│   ├── test_extractor.py
-│   └── test_planner.py
+│   ├── airflow/
+│   ├── observability/
+│   └── serving/
+├── transform/
+│   └── dbt_gastos_publicos/
+├── .dockerignore
 ├── .gitignore
+├── compose.yml
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
 ```
 
-O diretório `data/` é criado localmente durante as execuções e não é versionado no Git.
+O diretório `data/` é criado localmente, não é versionado e contém Bronze, metadados, DuckLake e o banco de consumo do Power BI.
 
-## Organização da camada Bronze
-
-A camada Bronze preserva as respostas recebidas da API sem aplicar transformações de negócio.
-
-Os arquivos são armazenados utilizando particionamento por:
-
-- dataset;
-- município;
-- exercício;
-- mês.
-
-Estrutura de armazenamento:
+## Organização da Bronze
 
 ```text
 data/bronze/tce_sp/{dataset}/municipio={municipio}/exercicio={ano}/mes={mes}/
@@ -338,346 +293,122 @@ Exemplo:
 data/bronze/tce_sp/despesas/municipio=salto/exercicio=2026/mes=01/
 ```
 
-Os nomes dos arquivos incluem:
+Os nomes dos arquivos incluem dataset, município, exercício, mês e timestamp UTC. Novas execuções criam novos snapshots sem sobrescrever arquivos existentes.
 
-- dataset;
-- município;
-- exercício;
-- mês;
-- timestamp UTC da extração.
+## Manifestos operacionais
 
-Exemplo:
+### Ingestão
 
-```text
-despesas_salto_2026_01_20260917T154048Z.json
-```
-
-Por padrão, uma nova execução cria um novo snapshot. Arquivos já existentes não são sobrescritos.
-
-## Escrita atômica
-
-A gravação dos arquivos Bronze utiliza escrita atômica.
-
-O processo ocorre em duas etapas:
-
-1. o conteúdo é gravado em um arquivo temporário com extensão `.tmp`;
-2. após a conclusão da escrita, o arquivo é renomeado para `.json`.
-
-Essa abordagem reduz o risco de arquivos parcialmente gravados caso a execução seja interrompida.
-
-## Manifesto de ingestão
-
-Cada tentativa de extração é registrada no arquivo:
+Cada tentativa de extração é registrada em:
 
 ```text
 data/metadata/ingestion_manifest.jsonl
 ```
 
-O manifesto utiliza o formato JSON Lines, com um objeto JSON por linha.
-
-Cada registro pode conter:
-
-- identificador da execução;
-- status;
-- dataset;
-- município;
-- exercício;
-- mês;
-- URL de origem;
-- quantidade de registros;
-- tamanho do arquivo;
-- hash SHA-256;
-- início da execução em UTC;
-- término da execução em UTC;
-- caminho do arquivo criado;
-- tipo do erro;
-- mensagem do erro.
-
 Status possíveis:
 
 - `success`: resposta válida com registros;
 - `empty`: resposta válida sem registros;
-- `failed`: falha durante a extração ou gravação.
+- `failed`: falha de extração ou gravação.
 
-Quando ocorre uma falha, ela é registrada no manifesto e propagada para o chamador.
+### Pipeline
 
-Uma extração com falha não cria um arquivo Bronze definitivo.
-
-## Resiliência das requisições
-
-O cliente HTTP possui mecanismos de resiliência para erros temporários.
-
-Status HTTP que podem gerar uma nova tentativa:
-
-- `429`;
-- `500`;
-- `502`;
-- `503`;
-- `504`.
-
-A configuração atual utiliza:
-
-- até 4 novas tentativas;
-- backoff exponencial;
-- suporte ao cabeçalho `Retry-After`;
-- timeout separado para conexão e leitura.
-
-Com `max_retries: 4` e `backoff_factor: 2`, os intervalos padrão são:
+Cada execução completa da DAG é registrada em:
 
 ```text
-2, 4, 8 e 16 segundos
+data/metadata/pipeline_runs.jsonl
 ```
 
-Quando a resposta contém o cabeçalho `Retry-After`, o tempo informado pelo servidor pode ser utilizado antes da próxima tentativa.
+O registro contém origem da execução, status, indicador de `dry-run`, horários, duração, etapa com falha e mensagem de erro.
 
-## Configuração
+## Estratégia de atualização
 
-As configurações da ingestão ficam centralizadas no arquivo:
+A estratégia varia por camada:
+
+### Bronze
+
+- ingestão incremental;
+- snapshots imutáveis;
+- atualização recorrente dos períodos configurados;
+- preservação do histórico físico.
+
+### Silver e Gold
+
+- reconstrução integral e idempotente;
+- seleção dos snapshots mais recentes;
+- execução de todos os testes e reconciliações.
+
+A reconstrução completa foi escolhida porque o volume atual permite processar todo o histórico em poucos segundos, reduzindo complexidade operacional e riscos de inconsistência. A decisão está documentada em:
 
 ```text
-config/ingestion.yml
+docs/adr/0001-estrategia-incremental.md
 ```
 
-Configuração atual:
+## Modelagem dimensional
 
-```yaml
-api:
-  base_url: "https://transparencia.tce.sp.gov.br/api/json"
-  connect_timeout_seconds: 10
-  read_timeout_seconds: 120
-  max_retries: 4
-  backoff_factor: 2
+### Dimensões conformadas
 
-ingestion:
-  municipality: "salto"
-  historical_start_year: 2020
-  refresh_previous_year: true
-  save_empty_responses: true
+- `dim_municipio`: município compartilhado pelas fatos;
+- `dim_orgao`: órgãos de despesas e receitas;
+- `dim_tempo`: calendário mensal contínuo;
+- `dim_fornecedor`: fornecedores das despesas;
+- `dim_fonte_recurso`: fontes das receitas;
+- `dim_aplicacao`: aplicações fixas;
+- `dim_alinea`: alíneas de receita;
+- `dim_subalinea`: subalíneas, incluindo `Não informada`.
 
-storage:
-  bronze_path: "data/bronze"
-  manifest_path: "data/metadata/ingestion_manifest.jsonl"
-```
+### Granularidade das fatos
 
-A centralização das configurações evita valores fixos espalhados pelo código e facilita a inclusão futura de outros ambientes e municípios.
+`fct_despesas` possui uma linha por evento financeiro associado a um empenho.
 
-## Instalação
+`fct_receitas` possui uma linha por ocorrência disponibilizada pela API.
 
-Clone o repositório:
+### Chaves
+
+- `tempo_sk`: chave numérica `AAAAMM`;
+- demais dimensões: hashes determinísticos derivados das chaves de negócio;
+- relacionamentos no Power BI: dimensão no lado `1`, fato no lado `*`, com filtro unidirecional.
+
+## Qualidade e testes
+
+Comando oficial:
 
 ```bash
-git clone URL_DO_REPOSITORIO
-cd gastos-publicos-salto
+./scripts/test_all.sh
 ```
 
-Crie o ambiente virtual:
+A validação consolidada executa:
+
+- 52 testes Python locais;
+- 12 modelos dbt;
+- 107 testes dbt;
+- 119 recursos aprovados no `dbt build`;
+- validação do Docker Compose;
+- 4 testes estruturais da DAG.
+
+Os testes cobrem ingestão, retry, escrita atômica, planejamento, contratos, integridade referencial, valores aceitos, reconciliação Silver-Gold, exportação atômica, observabilidade e estrutura da DAG.
+
+Os testes locais devem ser executados com:
 
 ```bash
-python3 -m venv .venv
+pytest -q --ignore=tests/airflow
 ```
 
-Ative o ambiente virtual:
+Os testes da DAG são executados dentro da imagem Docker do Airflow pelo script unificado.
 
-```bash
-source .venv/bin/activate
-```
-
-Instale as dependências:
-
-```bash
-pip install -r requirements.txt
-```
-
-## Execução mensal
-
-Para executar uma extração mensal de despesas:
-
-```bash
-python -m src.ingestion.tce_sp \
-  --dataset despesas \
-  --year 2026 \
-  --month 1
-```
-
-Para executar uma extração mensal de receitas:
-
-```bash
-python -m src.ingestion.tce_sp \
-  --dataset receitas \
-  --year 2026 \
-  --month 1
-```
-
-Parâmetros disponíveis:
-
-- `--dataset`: dataset que será extraído;
-- `--year`: exercício da extração;
-- `--month`: mês da extração;
-- `--municipality`: município desejado;
-- `--config`: caminho alternativo para o arquivo de configuração.
-
-Os parâmetros `--dataset`, `--year` e `--month` são obrigatórios.
-
-Quando `--municipality` não é informado, o município configurado em `config/ingestion.yml` é utilizado.
-
-## Backfill histórico
-
-O comando de backfill permite executar múltiplos períodos e datasets de forma sequencial.
-
-Exemplo de planejamento sem realizar requisições:
-
-```bash
-python -m src.ingestion.tce_sp.backfill \
-  --start-year 2020 \
-  --dry-run
-```
-
-A opção `--dry-run` apresenta o plano de execução sem acessar a API e sem criar arquivos Bronze.
-
-O processamento sequencial foi escolhido para evitar sobrecarregar a API pública do TCE-SP.
-
-Durante a execução:
-
-- cada combinação de dataset e período é processada individualmente;
-- falhas são registradas no manifesto;
-- uma falha individual não interrompe imediatamente todo o lote;
-- um resumo é exibido ao final;
-- o processo termina com código diferente de zero se houver alguma falha.
-
-O backfill histórico completo já foi executado. Ele não deve ser repetido desnecessariamente.
-
-## Atualização incremental
-
-O projeto diferencia dois cenários:
-
-### Carga histórica
-
-A primeira execução processa os dados desde janeiro de 2020 até o período corrente.
-
-### Execuções recorrentes
-
-As execuções seguintes devem processar somente os períodos necessários para atualização.
-
-A estratégia planejada considera:
-
-- atualização dos meses do exercício corrente;
-- possibilidade de atualizar novamente o exercício anterior;
-- preservação de novos snapshots na camada Bronze;
-- uso do manifesto para auditoria e controle das execuções.
-
-A automação e o agendamento dessa estratégia serão implementados posteriormente com Apache Airflow.
-
-## Testes automatizados
-
-Para executar a suíte de testes:
-
-```bash
-pytest -q
-```
-
-Último resultado validado:
-
-```text
-13 passed
-```
-
-Os testes cobrem:
-
-- rejeição de dataset inválido;
-- rejeição de mês inválido;
-- rejeição de intervalo de anos inválido;
-- planejamento de exercício completo;
-- planejamento de exercício parcial;
-- processamento de múltiplos datasets;
-- processamento de múltiplos períodos;
-- continuidade do lote após falha;
-- retry após resposta HTTP temporária;
-- sucesso depois de uma nova tentativa;
-- erro depois do esgotamento das tentativas;
-- registro de falha no manifesto;
-- garantia de que uma falha não cria arquivo Bronze.
-
-Os testes de comunicação HTTP utilizam `monkeypatch` e não realizam requisições reais à API.
-
-## Controle de versão
-
-O código-fonte, os testes e as configurações são versionados com Git.
-
-Os dados extraídos não são incluídos no repositório.
-
-Itens locais ignorados pelo Git incluem:
-
-- ambiente virtual;
-- caches do Python;
-- caches do pytest;
-- arquivos de dados;
-- metadados gerados pelas execuções;
-- arquivos temporários.
-
-Essa separação mantém o repositório leve e evita a publicação de grandes volumes de dados operacionais.
-
-## Decisões técnicas
-
-### Preservação do dado bruto
-
-A camada Bronze mantém o conteúdo recebido da API para garantir rastreabilidade e permitir que transformações futuras sejam refeitas sem uma nova extração.
-
-### Snapshots imutáveis
-
-As execuções não sobrescrevem arquivos existentes. Cada nova extração cria um snapshot identificado por timestamp UTC.
-
-### Particionamento mensal
-
-O particionamento acompanha a granularidade da API, que exige uma requisição para cada mês.
-
-### Execução sequencial
-
-As extrações são realizadas sequencialmente para reduzir a pressão sobre a API pública.
-
-### Manifesto em JSON Lines
-
-O formato JSON Lines permite acrescentar novos registros sem reescrever o arquivo inteiro e facilita processamento posterior.
-
-### Hash SHA-256
-
-O hash permite verificar a integridade dos arquivos e pode ser utilizado futuramente para detectar alterações ou duplicidade de conteúdo.
-
-### Configuração externa
-
-Parâmetros operacionais ficam em YAML para que mudanças de município, caminhos, timeouts e política de retry não exijam alterações no código.
-
-### Testes sem acesso à rede
-
-A suíte automatizada substitui as chamadas HTTP reais por respostas controladas, tornando os testes rápidos, determinísticos e independentes da disponibilidade da API.
+O perfil dbt utiliza `threads: 1`, pois materializações concorrentes apresentaram conflitos no DuckLake.
 
 ## Orquestração com Apache Airflow
 
-O pipeline é orquestrado localmente com Apache Airflow executado em contêineres Docker.
+A infraestrutura local utiliza:
 
-A infraestrutura utiliza:
-
-- Apache Airflow 3.3.2;
-- LocalExecutor;
-- PostgreSQL 16 para metadados;
-- Docker Compose;
-- imagem customizada com as dependências do projeto;
 - API Server;
-- Scheduler;
-- DAG Processor.
-
-A imagem customizada contém:
-
-- Python 3.12;
-- HTTPX;
-- PyYAML;
-- DuckDB;
-- dbt Core;
-- dbt-duckdb;
-- pytest.
+- Scheduler com LocalExecutor;
+- DAG Processor;
+- PostgreSQL para metadados;
+- imagem customizada com as dependências do pipeline.
 
 ### Serviços
-
-O arquivo `compose.yml` define os seguintes serviços:
 
 ```text
 postgres
@@ -687,328 +418,164 @@ airflow-scheduler
 airflow-dag-processor
 ```
 
-O PostgreSQL armazena os metadados operacionais do Airflow.
-
-O `airflow-init` executa as migrações necessárias no banco de metadados.
-
-O API Server disponibiliza a interface web e as APIs internas do Airflow.
-
-O Scheduler utiliza o LocalExecutor para iniciar as tarefas do pipeline.
-
-O DAG Processor monitora e processa os arquivos Python presentes em `airflow/dags/`.
-
-### Iniciar o Airflow
-
-Certifique-se de que o Docker Desktop esteja aberto e com a integração WSL2 ativa.
-
-Na raiz do projeto, execute:
-
-```bash
-docker compose up -d
-```
-
-Verifique o estado dos serviços:
-
-```bash
-docker compose ps
-```
-
-A interface do Airflow fica disponível em:
-
-```text
-http://localhost:8080
-```
-
-### Parar o Airflow
-
-Para encerrar os serviços preservando o banco de metadados:
-
-```bash
-docker compose down
-```
-
-Não utilize `docker compose down -v` em uma parada comum, pois a opção `-v` também remove o volume do PostgreSQL.
-
-### DAG do pipeline
-
-A DAG principal é:
+### DAG
 
 ```text
 gastos_publicos_salto
 ```
 
-Arquivo:
-
-```text
-airflow/dags/gastos_publicos_pipeline.py
-```
-
-Fluxo de tarefas:
+Fluxo:
 
 ```text
 atualizar_bronze
         |
         v
 transformar_e_testar
+        |
+        v
+exportar_power_bi
 ```
 
-A tarefa `atualizar_bronze` executa a atualização recorrente da camada Bronze.
+A DAG utiliza:
 
-A tarefa `transformar_e_testar` executa o `dbt build`, reconstruindo Silver e Gold e executando todos os testes de qualidade.
-
-A transformação só começa quando a ingestão termina com sucesso.
-
-### Agendamento
-
-A DAG está agendada para:
-
-```text
-Toda segunda-feira, às 10:00
-Fuso horário: America/Sao_Paulo
-```
-
-A configuração utiliza:
-
-- `catchup=False`, para impedir execuções retroativas;
-- `max_active_runs=1`, para impedir duas execuções simultâneas;
+- agendamento às segundas-feiras, às 10:00, no fuso `America/Sao_Paulo`;
+- `catchup=False`;
+- `max_active_runs=1`;
 - duas novas tentativas por tarefa;
-- intervalo de cinco minutos entre tentativas.
+- intervalo de cinco minutos entre tentativas;
+- callbacks de sucesso e falha;
+- logs Python sem buffer;
+- segredos compartilhados para autenticação interna.
 
-### Execução manual segura
-
-Para disparar a DAG sem acessar a API:
-
-```bash
-docker compose exec airflow-scheduler \
-  airflow dags trigger gastos_publicos_salto \
-  --conf '{"dry_run": true}'
-```
-
-Nesse modo:
-
-1. a Bronze apresenta o plano de atualização;
-2. nenhuma requisição é enviada à API;
-3. nenhum snapshot Bronze é criado;
-4. o `dbt build` é executado normalmente;
-5. Silver, Gold e os testes são validados.
-
-### Execução manual real
-
-Para executar o pipeline completo:
+### Execução em dry-run
 
 ```bash
-docker compose exec airflow-scheduler \
-  airflow dags trigger gastos_publicos_salto
+docker compose exec airflow-scheduler   airflow dags trigger gastos_publicos_salto   --conf '{"dry_run": true}'
 ```
 
-A última execução real validada apresentou:
+## Exportação para Power BI
 
-- 42 extrações planejadas;
-- 38 respostas com dados;
-- 4 respostas vazias válidas;
-- nenhuma falha;
-- 21 snapshots de despesas;
-- 21 snapshots de receitas;
-- 42 arquivos Bronze confirmados no manifesto;
-- 12 modelos dbt materializados;
-- 109 testes dbt aprovados;
-- 121 recursos aprovados;
-- nenhum aviso;
-- nenhum erro;
-- nenhum recurso ignorado.
-
-### Autenticação interna
-
-Os componentes do Airflow utilizam um segredo JWT compartilhado para comunicação interna entre Scheduler, processos de tarefa e API Server.
-
-O segredo é definido localmente no arquivo `.env`:
+Após a validação do dbt, o pipeline gera atomicamente:
 
 ```text
-AIRFLOW_JWT_SECRET
+data/bi/gastos_publicos.duckdb
 ```
 
-O arquivo `.env` não é versionado no Git.
-
-### Persistência e volumes
-
-O repositório é montado nos contêineres em:
+Schemas exportados:
 
 ```text
-/opt/airflow/project
+gold
+ops
 ```
 
-Isso permite que as tarefas acessem:
+O schema `gold` contém as oito dimensões e as duas fatos. O schema `ops` contém:
 
-```text
-src/
-config/
-data/
-scripts/
-transform/
-airflow/
-```
+- `ingestion_runs`: uma linha por tentativa de extração da API;
+- `pipeline_runs`: uma linha por execução completa da DAG.
 
-Os metadados do Airflow são armazenados em um volume Docker persistente.
+A versão anterior do arquivo é preservada caso a nova exportação falhe. No Power BI Desktop, é necessário clicar em **Atualizar** após a conclusão do pipeline.
 
-Os JSON da Bronze, o catálogo DuckLake e os arquivos analíticos permanecem no diretório local `data/`, fora do controle de versão.
+## Observabilidade
 
-### Comandos de diagnóstico
+A observabilidade combina:
 
-Listar erros de importação das DAGs:
+- manifesto de ingestão da Bronze;
+- manifesto de execuções completas;
+- logs por tarefa no Airflow;
+- histórico de DAG Runs;
+- retentativas e timeouts;
+- callbacks de sucesso e falha;
+- testes dbt e reconciliações;
+- exportação de tabelas operacionais para o Power BI.
 
-```bash
-docker compose exec airflow-scheduler \
-  airflow dags list-import-errors
-```
+A página de monitoramento acompanha, entre outros indicadores:
 
-Listar as tarefas da DAG:
-
-```bash
-docker compose exec airflow-scheduler \
-  airflow tasks list gastos_publicos_salto
-```
-
-Acompanhar logs do Scheduler:
-
-```bash
-docker compose logs -f airflow-scheduler
-```
-
-Validar o Docker Compose sem iniciar os serviços:
-
-```bash
-docker compose config --quiet
-```
+- última extração;
+- status das chamadas à API;
+- respostas vazias e falhas;
+- registros processados;
+- duração média das extrações;
+- última execução completa do pipeline;
+- execução real ou `dry-run`;
+- duração e status da DAG;
+- etapa que falhou.
 
 ## Demonstração
 
 ### Visão Executiva
 
-A página executiva consolida receitas, despesas, saldos, evolução mensal, órgãos e fornecedores em uma visão analítica integrada.
+A página executiva consolida receitas, despesas, saldos, evolução mensal, órgãos e fornecedores.
 
-docs/images/power-bi-visao-executiva.png
+![Visão Executiva](docs/images/power-bi-visao-executiva.png)
 
 ### Monitoramento do Pipeline
 
-A página operacional acompanha as requisições à API e as execuções completas do pipeline, incluindo status, duração, registros processados, respostas vazias e falhas.
+A página operacional acompanha as requisições à API e as execuções completas do pipeline.
 
-docs/images/power-bi-monitoramento.png
+![Monitoramento do Pipeline](docs/images/power-bi-monitoramento.png)
 
 ### Orquestração no Airflow
 
-O Apache Airflow coordena a atualização da Bronze, a reconstrução e os testes das camadas Silver e Gold, além da exportação da base de consumo utilizada pelo Power BI.
+O Airflow coordena ingestão, transformação, testes e exportação para o Power BI.
 
-docs/images/airflow-dag.png
+![DAG no Airflow](docs/images/airflow-dag.png)
 
+## Decisões técnicas
 
-## Modelagem dimensional implementada
+- snapshots Bronze imutáveis;
+- escrita atômica;
+- particionamento mensal alinhado à API;
+- extrações sequenciais para reduzir pressão sobre a fonte pública;
+- manifesto em JSON Lines para escrita incremental;
+- hash SHA-256 para integridade;
+- configuração externa em YAML;
+- testes HTTP sem acesso real à rede;
+- reconstrução integral da Silver e da Gold no volume atual;
+- `threads: 1` no dbt para estabilidade do DuckLake;
+- metadados físicos mantidos na Silver e removidos das fatos Gold;
+- banco DuckDB independente para consumo no Power BI;
+- separação entre schemas de negócio (`gold`) e operação (`ops`).
 
-A camada Gold utiliza modelagem dimensional para disponibilizar dados preparados para análise no Power BI.
+## Controle de versão
 
-### Dimensões conformadas
+O repositório versiona código, testes, configurações, DAGs, documentação e imagens.
 
-- `dim_municipio`: municípios compartilhados pelas tabelas fato;
-- `dim_orgao`: órgãos públicos compartilhados entre despesas e receitas;
-- `dim_tempo`: calendário mensal contínuo entre janeiro de 2020 e o mês corrente;
-- `dim_fornecedor`: fornecedores relacionados às despesas;
-- `dim_fonte_recurso`: fontes de recurso das receitas;
-- `dim_aplicacao`: classificações de aplicação fixa;
-- `dim_alinea`: classificações de alínea;
-- `dim_subalinea`: classificações de subalínea, incluindo o membro especial `Não informada`.
+Não são versionados:
 
-### Tabelas fato
+- `.venv`;
+- dados extraídos;
+- catálogo DuckLake;
+- banco de consumo do Power BI;
+- logs do Airflow;
+- metadados locais;
+- caches;
+- arquivos temporários;
+- segredos do `.env`.
 
-- `fct_despesas`: eventos financeiros associados aos empenhos;
-- `fct_receitas`: ocorrências de receitas disponibilizadas pela API.
+## Evoluções futuras
 
-### Granularidade de despesas
-
-Cada linha de `fct_despesas` representa um evento financeiro associado a um empenho.
-
-Eventos observados:
-
-- `Anulação`;
-- `Empenhado`;
-- `Reforço`;
-- `Valor Liquidado`;
-- `Valor Pago`.
-
-Os valores não devem ser somados indiscriminadamente entre eventos, pois empenhado, liquidado e pago representam estágios financeiros diferentes.
-
-### Granularidade de receitas
-
-Cada linha de `fct_receitas` representa uma ocorrência disponibilizada pela API.
-
-A fonte não fornece identificador transacional ou data de arrecadação. Por esse motivo:
-
-- nenhuma linha é removida por deduplicação;
-- registros com atributos idênticos são preservados;
-- uma impressão digital identifica o conteúdo da receita;
-- um número sequencial distingue ocorrências idênticas;
-- a chave criada é técnica e não representa um identificador oficial da fonte.
-
-### Tratamento de fornecedores
-
-A análise identificou que alguns códigos de pessoa física estão associados a nomes diferentes.
-
-A chave de negócio da dimensão utiliza:
-
-- `id_fornecedor` para CNPJ e demais identificações;
-- `id_fornecedor` combinado com `nm_fornecedor` para pessoas físicas.
-
-Essa regra evita agrupar pessoas diferentes que compartilham o mesmo identificador disponibilizado pela API.
-
-Quando um fornecedor possui vários nomes, o nome atual é selecionado pelos seguintes critérios:
-
-1. data mais recente observada;
-2. maior frequência na data mais recente;
-3. ordem alfabética como desempate técnico.
-
-O nome original de cada lançamento permanece preservado em `fct_despesas`.
-
-### Chaves dimensionais
-
-As dimensões utilizam chaves determinísticas para que uma reconstrução completa produza os mesmos identificadores.
-
-A dimensão temporal utiliza uma chave numérica no formato `AAAAMM`.
-
-Exemplo:
-
-```text
-202001
-202002
-202003
-```
-
-## Expansão futura
-
-Depois da validação completa do pipeline para Salto/SP, a estrutura poderá ser expandida para:
-
-- outros municípios do Estado de São Paulo;
-- processamento configurável de listas de municípios;
-- ingestão de todos os municípios disponibilizados pela API;
-- execução em servidor dedicado;
-- agendamento recorrente;
-- monitoramento operacional;
-- enriquecimentos e geração de insights com modelos de IA.
+- incluir outros municípios do Estado de São Paulo;
+- permitir listas configuráveis de municípios;
+- publicar o relatório no Power BI Service;
+- configurar atualização automática por gateway;
+- adicionar notificações externas de falha;
+- implementar CI/CD com GitHub Actions;
+- reavaliar materializações incrementais quando o volume justificar;
+- explorar enriquecimentos analíticos com modelos de inteligência artificial.
 
 ## Finalidade
 
-Este projeto tem finalidade educacional e de portfólio.
+Este projeto tem finalidade educacional e de portfólio. Ele demonstra conhecimentos práticos em:
 
-O objetivo principal não é apenas analisar gastos públicos municipais, mas demonstrar conhecimentos práticos em:
-
-- ingestão de dados;
-- integração com APIs;
+- ingestão e integração com APIs;
 - programação em Python;
-- arquitetura medalhão;
-- armazenamento de dados;
+- arquitetura em medalhões;
+- armazenamento com DuckDB e DuckLake;
+- transformação e testes com dbt;
 - modelagem dimensional;
-- transformação com dbt;
-- testes de qualidade;
-- resiliência de pipelines;
+- resiliência e rastreabilidade;
+- orquestração com Airflow;
+- conteinerização com Docker;
 - observabilidade;
-- orquestração;
-- versionamento;
-- documentação técnica;
-- visualização de dados.
+- visualização com Power BI;
+- versionamento e documentação técnica.
