@@ -2,7 +2,7 @@
 
 Projeto de engenharia de dados para ingestão, transformação, orquestração, observabilidade e análise de receitas e despesas municipais disponibilizadas pela API de Transparência do Tribunal de Contas do Estado de São Paulo (TCE-SP).
 
-O município de Salto/SP é utilizado como escopo inicial. O projeto foi desenvolvido para aprendizado e portfólio, aplicando práticas de engenharia de dados, arquitetura em medalhões, modelagem dimensional, testes automatizados, observabilidade e visualização no Power BI.
+O município de Salto/SP é utilizado como escopo inicial. O projeto foi desenvolvido para aprendizado e contribuição, aplicando práticas de engenharia de dados, arquitetura em medalhões, modelagem dimensional, testes automatizados, observabilidade e visualização no Power BI.
 
 ## Objetivos
 
