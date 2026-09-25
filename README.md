@@ -565,7 +565,7 @@ Não são versionados:
 
 ## Finalidade
 
-Este projeto tem finalidade educacional e de portfólio. Ele demonstra conhecimentos práticos em:
+Este projeto tem finalidade educacional e de contribuir. Ele demonstra conhecimentos práticos em:
 
 - ingestão e integração com APIs;
 - programação em Python;
