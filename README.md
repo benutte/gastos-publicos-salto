@@ -893,25 +893,6 @@ O Apache Airflow coordena a atualização da Bronze, a reconstrução e os teste
 
 docs/images/airflow-dag.png
 
-## Próximas etapas
-
-Com as camadas Bronze, Silver e Gold implementadas, as próximas etapas planejadas são:
-
-1. concluir a documentação técnica da camada Gold;
-2. revisar a estratégia de atualização incremental da Silver e da Gold;
-3. criar comandos padronizados para execução do dbt;
-4. configurar Apache Airflow para orquestração;
-5. executar o pipeline localmente por meio do Docker;
-6. criar DAGs para ingestão, transformação e testes;
-7. implementar tratamento operacional de falhas e novas tentativas;
-8. adicionar monitoramento das execuções;
-9. conectar o catálogo analítico ao Power BI;
-10. criar medidas e indicadores financeiros;
-11. desenvolver dashboards de receitas e despesas;
-12. preparar diagramas da arquitetura e do modelo dimensional;
-13. revisar a documentação para publicação no GitHub;
-14. avaliar a expansão para outros municípios;
-15. avaliar enriquecimentos futuros com modelos de IA.
 
 ## Modelagem dimensional implementada
 
